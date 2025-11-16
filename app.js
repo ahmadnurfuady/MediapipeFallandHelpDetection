@@ -1,5 +1,6 @@
 // Client-side Fall Detection using MediaPipe Tasks (Pose Landmarker)
-// HELP gesture: Arms Crossed (tangan menyilang di dada), tanpa waving.
+// HELP gesture: Arms Crossed (tangan menyilang di dada) + One-hand Raise-and-Hold.
+// ROI: Rotated Rectangle (4 sudut bisa di-drag/rotate).
 // Status priority: HELP > EMERGENCY (fall) > SAFE (Sleeping) > SAFE
 // Telegram: via Cloudflare Worker proxy (recommended). Cooldown terpisah HELP dan EMERGENCY.
 
@@ -52,6 +53,11 @@ const CONFIG = {
     holdS: 6.0, // lama status HELP dipertahankan
     clearAfterQuietS: 2.0, // setelah hold dan tidak menyilang lagi dalam periode ini -> clear
   },
+  // One-hand raise-and-hold config
+  raiseHold: {
+    sustainS: 1.2,   // durasi minimal tangan di atas bahu untuk memicu HELP
+    yMargin: 0.05,   // margin (rasio tinggi torso) di atas bahu agar dianggap "di atas"
+  },
 };
 
 const STATE = {
@@ -70,6 +76,11 @@ const STATE = {
   armsCrossedSince: 0,
   lastArmsCrossedT: 0,
 
+  // One-hand raise-and-hold
+  handRaisedNow: false,
+  handRaisedSince: 0,
+  lastHandRaisedT: 0,
+
   // HELP state
   helpActive: false,
   helpSince: 0,
@@ -82,43 +93,15 @@ const STATE = {
   // Status terakhir untuk toast
   lastStatus: "SAFE",
 
-  // ROI bed
+  // ROI bed (rotated rectangle)
   editingROI: false,
-  roiDraft: null,
-  bedROI: loadROI(),
+  roiDraftRRect: null, // 4 titik (DISPLAY coords) saat edit
+  roiDragCorner: -1,
+  roiLastMouse: null,
+  bedROI: null, // { type:'rrect', pts:[{x,y} x4] } (STREAM coords)
 };
 
-function deleteROI() {
-  const hasROI = !!STATE.bedROI;
-  const hasDraft = !!STATE.roiDraft;
-  if (!hasROI && !hasDraft) {
-    alert("Tidak ada ROI yang tersimpan.");
-    return;
-  }
-  if (!confirm("Hapus ROI?")) return;
-
-  STATE.bedROI = null;
-  STATE.roiDraft = null;
-  saveROI(null); // hapus dari localStorage
-  setEditorUI(false); // keluar dari mode edit (jika sedang edit)
-  drawROIOverlay(); // bersihkan overlay
-  alert("ROI dihapus.");
-}
-
-function loadROI() {
-  const raw = localStorage.getItem("bed_roi_v1");
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-function saveROI(roi) {
-  if (roi) localStorage.setItem("bed_roi_v1", JSON.stringify(roi));
-  else localStorage.removeItem("bed_roi_v1");
-}
-
+// ====== General UI helpers ======
 function setStatus(status) {
   UI.badge.textContent = status;
   if (status.startsWith("SAFE")) {
@@ -165,62 +148,302 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
+// ====== ROI (Rotated Rectangle dengan 4 Sudut) ======
+const ROI_STORAGE_KEY = 'bed_roi_rrect_v1';
+
+/*
+Format penyimpanan:
+{
+  type: 'rrect',
+  pts: [ {x,y}, {x,y}, {x,y}, {x,y} ]  // urutan searah jarum jam atau ccw
+}
+Semua koordinat dalam ruang stream (CONFIG.streamW x CONFIG.streamH)
+*/
+
+function dispToStreamPt(p, canvas) {
+  const sx = CONFIG.streamW / canvas.width;
+  const sy = CONFIG.streamH / canvas.height;
+  return { x: Math.round(p.x * sx), y: Math.round(p.y * sy) };
+}
+function streamToDispPt(p, canvas) {
+  const sx = canvas.width / CONFIG.streamW;
+  const sy = canvas.height / CONFIG.streamH;
+  return { x: Math.round(p.x * sx), y: Math.round(p.y * sy) };
+}
+
+function loadROI() {
+  const raw = localStorage.getItem(ROI_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    const obj = JSON.parse(raw);
+    if (obj && obj.type === 'rrect' && Array.isArray(obj.pts) && obj.pts.length === 4) {
+      return obj;
+    }
+  } catch {}
+  return null;
+}
+function saveROI(roi) {
+  if (!roi) {
+    localStorage.removeItem(ROI_STORAGE_KEY);
+    return;
+  }
+  const toSave = {
+    type: 'rrect',
+    pts: roi.pts.map(p => ({ x: Math.round(p.x), y: Math.round(p.y) }))
+  };
+  localStorage.setItem(ROI_STORAGE_KEY, JSON.stringify(toSave));
+}
+
+function deleteROI() {
+  const hasROI = !!STATE.bedROI;
+  const hasDraft = !!STATE.roiDraftRRect;
+  if (!hasROI && !hasDraft) {
+    alert("Tidak ada ROI yang tersimpan.");
+    return;
+  }
+  if (!confirm("Hapus ROI?")) return;
+
+  STATE.bedROI = null;
+  STATE.roiDraftRRect = null;
+  saveROI(null);
+  setEditorUI(false);
+  drawROIOverlay();
+  alert("ROI dihapus.");
+}
+
+// point-in-quad (ray casting) dalam STREAM coords
+function pointInQuad(ptStreamArr) {
+  const roi = STATE.bedROI;
+  if (!roi || roi.type !== 'rrect' || roi.pts.length !== 4) return false;
+  let inside = false;
+  const pts = roi.pts;
+  for (let i=0,j=pts.length-1;i<pts.length;j=i++) {
+    const xi = pts[i].x, yi = pts[i].y;
+    const xj = pts[j].x, yj = pts[j].y;
+    const intersect = ((yi > ptStreamArr[1]) !== (yj > ptStreamArr[1])) &&
+      (ptStreamArr[0] < ((xj - xi) * (ptStreamArr[1] - yi)) / ((yj - yi) || 1e-9) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Dipakai oleh fall logic (pt = [x,y] dalam STREAM coords)
+function pointInROI(pt) {
+  return pointInQuad(pt);
+}
+
 function setEditorUI(on) {
   STATE.editingROI = on;
   UI.roiEdit.classList.toggle("hidden", on);
   UI.roiSave.classList.toggle("hidden", !on);
   UI.roiCancel.classList.toggle("hidden", !on);
   UI.roiCanvas.style.pointerEvents = on ? "auto" : "none";
-  if (!on) {
-    STATE.roiDraft = null;
+
+  const c = UI.roiCanvas;
+
+  if (on) {
+    if (STATE.bedROI && STATE.bedROI.type === "rrect") {
+      STATE.roiDraftRRect = STATE.bedROI.pts.map(p => streamToDispPt(p, c));
+    } else {
+      STATE.roiDraftRRect = null; // akan dibuat dengan drag pertama
+    }
+  } else {
+    STATE.roiDraftRRect = null;
+    STATE.roiDragCorner = -1;
+    STATE.roiLastMouse = null;
     drawROIOverlay();
   }
 }
-function displayToStream(draft, canvas) {
-  const sx = CONFIG.streamW / canvas.width;
-  const sy = CONFIG.streamH / canvas.height;
-  return {
-    x: Math.round(draft.x * sx),
-    y: Math.round(draft.y * sy),
-    w: Math.max(1, Math.round(draft.w * sx)),
-    h: Math.max(1, Math.round(draft.h * sy)),
-  };
-}
-function streamToDisplay(roi, canvas) {
-  const sx = canvas.width / CONFIG.streamW;
-  const sy = canvas.height / CONFIG.streamH;
-  return {
-    x: Math.round(roi.x * sx),
-    y: Math.round(roi.y * sy),
-    w: Math.round(roi.w * sx),
-    h: Math.round(roi.h * sy),
-  };
-}
+
 function drawROIOverlay() {
-  const c = UI.roiCanvas,
-    ctx = c.getContext("2d");
+  const c = UI.roiCanvas;
+  const ctx = c.getContext("2d");
   ctx.clearRect(0, 0, c.width, c.height);
-  const drawRect = (r) => {
-    ctx.fillStyle = "rgba(255, 0, 255, 0.12)";
+
+  const drawCorners = (pts) => {
+    ctx.fillStyle = "rgba(255,0,255,0.10)";
     ctx.strokeStyle = "#ff6ad5";
     ctx.lineWidth = 2;
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    pts.forEach((p) => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = "#ff6ad5";
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.stroke();
+    });
   };
-  if (STATE.roiDraft) drawRect(STATE.roiDraft);
-  else if (STATE.bedROI) drawRect(streamToDisplay(STATE.bedROI, c));
-}
-function pointInROI(pt) {
-  if (!pt || !STATE.bedROI) return false;
-  const { x, y, w, h } = STATE.bedROI;
-  return (
-    pt[0] >= x - 20 &&
-    pt[0] <= x + w + 20 &&
-    pt[1] >= y - 20 &&
-    pt[1] <= y + h + 20
-  );
+
+  if (STATE.editingROI) {
+    if (STATE.roiDraftRRect && STATE.roiDraftRRect.length === 4) {
+      drawCorners(STATE.roiDraftRRect);
+    } else if (STATE.roiDraftRRect && STATE.roiDraftRRect.length === 2) {
+      // sedang drag membuat axis-aligned rect awal
+      const [a, b] = STATE.roiDraftRRect;
+      const rectPts = [
+        { x: a.x, y: a.y },
+        { x: b.x, y: a.y },
+        { x: b.x, y: b.y },
+        { x: a.x, y: b.y },
+      ];
+      drawCorners(rectPts);
+    }
+    return;
+  }
+
+  // Mode non-edit: gambar ROI final jika ada
+  if (STATE.bedROI && STATE.bedROI.type === "rrect" && STATE.bedROI.pts.length === 4) {
+    const dispPts = STATE.bedROI.pts.map((p) => streamToDispPt(p, c));
+    drawCorners(dispPts);
+  }
 }
 
+// helper transform
+function centroid(pts) {
+  const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+  const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+  return { x: cx, y: cy };
+}
+function rotateAll(pts, angleRad) {
+  const c = centroid(pts);
+  const cos = Math.cos(angleRad), sin = Math.sin(angleRad);
+  return pts.map((p) => {
+    const dx = p.x - c.x, dy = p.y - c.y;
+    return { x: c.x + dx * cos - dy * sin, y: c.y + dx * sin + dy * cos };
+  });
+}
+
+function attachRoiEvents() {
+  const canvas = UI.roiCanvas;
+  let makingRect = false;
+
+  const toLocal = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+
+  canvas.addEventListener("mousedown", (e) => {
+    if (!STATE.editingROI) return;
+    const p = toLocal(e);
+
+    if (!STATE.roiDraftRRect) {
+      // mulai buat rect awal (axis-aligned)
+      makingRect = true;
+      STATE.roiDraftRRect = [p, p]; // dua titik sementara
+      drawROIOverlay();
+      return;
+    }
+
+    if (STATE.roiDraftRRect.length === 2) {
+      makingRect = true;
+      return;
+    }
+
+    // Sudah 4 titik: cek corner yang di-klik
+    const pts = STATE.roiDraftRRect;
+    let hit = -1;
+    for (let i = 0; i < pts.length; i++) {
+      const d = Math.hypot(pts[i].x - p.x, pts[i].y - p.y);
+      if (d <= 10) { hit = i; break; }
+    }
+    if (hit >= 0) {
+      STATE.roiDragCorner = hit;
+      STATE.roiLastMouse = p;
+    } else {
+      STATE.roiDragCorner = -1;
+      STATE.roiLastMouse = p;
+    }
+  });
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (!STATE.editingROI) return;
+    const p = toLocal(e);
+
+    if (STATE.roiDraftRRect && STATE.roiDraftRRect.length === 2 && makingRect) {
+      // update titik kedua
+      STATE.roiDraftRRect[1] = p;
+      drawROIOverlay();
+      return;
+    }
+
+    if (STATE.roiDraftRRect && STATE.roiDraftRRect.length === 4) {
+      if (STATE.roiDragCorner >= 0) {
+        // drag corner
+        const prev = STATE.roiLastMouse || p;
+        const dx = p.x - prev.x, dy = p.y - prev.y;
+        const pts = STATE.roiDraftRRect.slice();
+        pts[STATE.roiDragCorner] = { x: pts[STATE.roiDragCorner].x + dx, y: pts[STATE.roiDragCorner].y + dy };
+        STATE.roiDraftRRect = pts;
+        STATE.roiLastMouse = p;
+        drawROIOverlay();
+      } else if (STATE.roiLastMouse && e.shiftKey) {
+        // Shift + drag di area: rotasi semua
+        const prev = STATE.roiLastMouse;
+        const c = centroid(STATE.roiDraftRRect);
+        const a1 = Math.atan2(prev.y - c.y, prev.x - c.x);
+        const a2 = Math.atan2(p.y - c.y, p.x - c.x);
+        const da = a2 - a1;
+        STATE.roiDraftRRect = rotateAll(STATE.roiDraftRRect, da);
+        STATE.roiLastMouse = p;
+        drawROIOverlay();
+      }
+    }
+  });
+
+  window.addEventListener("mouseup", () => {
+    makingRect = false;
+    if (STATE.roiDraftRRect && STATE.roiDraftRRect.length === 2) {
+      const [a, b] = STATE.roiDraftRRect;
+      const rectPts = [
+        { x: a.x, y: a.y },
+        { x: b.x, y: a.y },
+        { x: b.x, y: b.y },
+        { x: a.x, y: b.y },
+      ];
+      STATE.roiDraftRRect = rectPts;
+      drawROIOverlay();
+    }
+    STATE.roiDragCorner = -1;
+    STATE.roiLastMouse = null;
+  });
+
+  canvas.addEventListener("contextmenu", (e) => {
+    if (STATE.editingROI) {
+      e.preventDefault();
+      STATE.roiDragCorner = -1;
+      return false;
+    }
+  });
+
+  window.addEventListener("resize", syncCanvasSize);
+
+  UI.roiEdit.addEventListener("click", () => setEditorUI(true));
+  UI.roiCancel.addEventListener("click", () => setEditorUI(false));
+  UI.roiSave.addEventListener("click", () => {
+    if (!STATE.roiDraftRRect || STATE.roiDraftRRect.length !== 4) {
+      alert("Buat rectangle dulu (drag) hingga muncul 4 titik sudut.");
+      return;
+    }
+    const canvas = UI.roiCanvas;
+    const ptsStream = STATE.roiDraftRRect.map((p) => dispToStreamPt(p, canvas));
+    STATE.bedROI = { type: "rrect", pts: ptsStream };
+    saveROI(STATE.bedROI);
+    setEditorUI(false);
+    drawROIOverlay();
+    alert("ROI (rotated rectangle) disimpan.");
+  });
+
+  UI.roiDelete.addEventListener("click", deleteROI);
+}
+
+// ====== Pose utils ======
 const MP_INDEX = {
   NOSE: 0,
   LEFT_SHOULDER: 11,
@@ -310,7 +533,6 @@ function computeAngles(lm) {
 function dist(a, b) {
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
 }
-
 function detectArmsCrossed(lm, angles) {
   const ls = lm.left_shoulder,
     rs = lm.right_shoulder;
@@ -327,30 +549,23 @@ function detectArmsCrossed(lm, angles) {
   const midX = shoulders_mid[0];
   const shY = shoulders_mid[1];
 
-  // 1) Wrist di sisi berlawanan relatif garis tengah bahu
   const oppSides = (lw[0] - midX) * (rw[0] - midX) < 0;
-
-  // 2) Wrist cukup dekat satu sama lain
   const wristsClose = dist(lw, rw) / shoulderW < 0.7;
 
-  // 3) Di band dada (antara ~bahu dan ~atas pinggul)
   const minY = shY - 0.2 * torsoH;
   const maxY = shY + 0.6 * torsoH;
   const inChestBand =
     lw[1] >= minY && lw[1] <= maxY && rw[1] >= minY && rw[1] <= maxY;
 
-  // 4) Siku tertekuk (kedua sisi)
   const elbowsFlexed =
     angles.left_elbow &&
     angles.left_elbow < 120 &&
     angles.right_elbow &&
     angles.right_elbow < 120;
 
-  // 5) Masing-masing pergelangan dekat ke bahu seberangnya
   const nearOppShoulders =
     dist(lw, rs) / shoulderW < 0.9 && dist(rw, ls) / shoulderW < 0.9;
 
-  // Minimal 3 dari 5 kriteria terpenuhi
   const checks = [
     oppSides,
     wristsClose,
@@ -360,6 +575,26 @@ function detectArmsCrossed(lm, angles) {
   ];
   const score = checks.filter(Boolean).length;
   return score >= 3;
+}
+
+// ====== One-hand Raise-and-Hold Detection ======
+function detectHandRaised(lm, marginRatio = CONFIG.raiseHold.yMargin) {
+  const ls = lm.left_shoulder,
+    rs = lm.right_shoulder;
+  const lw = lm.left_wrist,
+    rw = lm.right_wrist;
+  const hips_mid = mid(lm.left_hip, lm.right_hip);
+  const shoulders_mid = mid(lm.left_shoulder, lm.right_shoulder);
+  if (!ls || !rs || !lw || !rw || !shoulders_mid || !hips_mid)
+    return { raised: false, left: false, right: false };
+
+  const torsoH = Math.max(1, dist(shoulders_mid, hips_mid));
+  const marginPx = Math.round(torsoH * (marginRatio ?? 0.05));
+
+  const leftRaised = lw[1] < ls[1] - marginPx;
+  const rightRaised = rw[1] < rs[1] - marginPx;
+
+  return { raised: leftRaised || rightRaised, left: leftRaised, right: rightRaised };
 }
 
 // ====== Core update (fall + help) ======
@@ -414,7 +649,19 @@ function updateFall(t, pose) {
     STATE.armsCrossedNow = false;
   }
 
-  // Confidence
+  // One-hand raise-and-hold detection + smoothing
+  const raise = detectHandRaised(lm);
+  if (raise.raised) {
+    if (!STATE.handRaisedNow) {
+      STATE.handRaisedSince = t;
+      STATE.handRaisedNow = true;
+    }
+    STATE.lastHandRaisedT = t;
+  } else {
+    STATE.handRaisedNow = false;
+  }
+
+  // Confidence (fall)
   let conf = 0;
   conf += horizontal ? 0.35 : 0;
   conf += ground ? 0.25 : 0;
@@ -439,14 +686,23 @@ function updateFall(t, pose) {
   if (STATE.inFallWindow && STATE.lastFallTriggerT)
     timer = t - STATE.lastFallTriggerT;
 
-  // HELP trigger (arms-crossed sustained) & auto-clear
-  const sustained =
+  // HELP trigger:
+  // - arms crossed sustained, OR
+  // - one-hand raise-and-hold sustained
+  const sustainedCross =
     STATE.armsCrossedNow && t - STATE.armsCrossedSince >= CONFIG.help.sustainS;
-  if (sustained) {
+  const sustainedRaise =
+    STATE.handRaisedNow &&
+    t - STATE.handRaisedSince >= (CONFIG.raiseHold?.sustainS ?? 1.2);
+
+  const hasHelpSignal = sustainedCross || sustainedRaise;
+
+  if (hasHelpSignal) {
     if (!STATE.helpActive) (STATE.helpActive = true), (STATE.helpSince = t);
-    STATE.helpExpiresAt = t + CONFIG.help.holdS; // perpanjang selama menyilang
+    STATE.helpExpiresAt = t + CONFIG.help.holdS;
   } else if (STATE.helpActive) {
-    const quiet = t - (STATE.lastArmsCrossedT || 0);
+    const lastSignalT = Math.max(STATE.lastArmsCrossedT || 0, STATE.lastHandRaisedT || 0);
+    const quiet = t - (lastSignalT || 0);
     if (t >= STATE.helpExpiresAt && quiet >= CONFIG.help.clearAfterQuietS) {
       STATE.helpActive = false;
     }
@@ -460,6 +716,7 @@ function updateFall(t, pose) {
     timer,
     help_active: STATE.helpActive,
     arms_crossed: STATE.armsCrossedNow,
+    hand_raised: STATE.handRaisedNow,
   };
 }
 
@@ -481,7 +738,6 @@ async function sendTelegram(text) {
       });
       return resp.ok;
     } else {
-      // direct (insecure)
       if (!TELEGRAM.botToken) return false;
       const url = `https://api.telegram.org/bot${encodeURIComponent(
         TELEGRAM.botToken
@@ -501,8 +757,19 @@ async function maybeSendTelegramHelp() {
   const now = nowS();
   if (now - (STATE.lastHelpSent || 0) < (TELEGRAM.cooldownS || 60)) return;
   const ts = new Date().toLocaleString();
-  const text = ["🟠 HELP: Arms Crossed detected", `Time: ${ts}`].join("\n");
-  if (await sendTelegram(text)) STATE.lastHelpSent = now;
+  const text = ["🟠 HELP: Help gesture detected", `Time: ${ts}`].join("\n");
+
+  try {
+    const sent = await sendTelegram(text);
+    if (sent) {
+      STATE.lastHelpSent = now;
+      if (typeof window !== 'undefined' && typeof window.onDetectedAndNotified === 'function') {
+        window.onDetectedAndNotified('help').catch(e => console.error('onDetectedAndNotified(help) error', e));
+      }
+    }
+  } catch (e) {
+    console.error('maybeSendTelegramHelp error:', e);
+  }
 }
 
 async function maybeSendTelegramFall(confVal) {
@@ -515,7 +782,18 @@ async function maybeSendTelegramFall(confVal) {
     `Time: ${ts}`,
     `Fall Confidence: ${Math.round((confVal || 0) * 100)}%`,
   ].join("\n");
-  if (await sendTelegram(text)) STATE.lastFallSent = now;
+
+  try {
+    const sent = await sendTelegram(text);
+    if (sent) {
+      STATE.lastFallSent = now;
+      if (typeof window !== 'undefined' && typeof window.onDetectedAndNotified === 'function') {
+        window.onDetectedAndNotified('fall', confVal).catch(e => console.error('onDetectedAndNotified(fall) error', e));
+      }
+    }
+  } catch (e) {
+    console.error('maybeSendTelegramFall error:', e);
+  }
 }
 
 // ====== Drawing & UI ======
@@ -554,7 +832,6 @@ function drawSkeleton(ctx, lm) {
 }
 function drawOverlay(ctx, res) {
   const W = ctx.canvas.width;
-  // Status final: HELP > EMERGENCY > SAFE (Sleeping) > SAFE
   let status = "SAFE";
   if (res.help_active) status = "HELP";
   else if (!res.safe && !res.sleeping) status = "EMERGENCY";
@@ -581,7 +858,6 @@ function drawOverlay(ctx, res) {
   );
 }
 function updateUI(res) {
-  // Angles panel (tetap)
   const keys = [
     "Left Elbow",
     "Right Elbow",
@@ -609,7 +885,6 @@ function updateUI(res) {
     )}°`;
   });
 
-  // Status final
   let status = "SAFE";
   if (res.help_active) status = "HELP";
   else if (!res.safe && !res.sleeping) status = "EMERGENCY";
@@ -617,13 +892,13 @@ function updateUI(res) {
 
   setStatus(status);
   UI.fallConf.textContent = `${Math.round(res.fall_confidence * 100)}%`;
-  UI.helpGesture.textContent = res.arms_crossed ? "ON" : "OFF";
+  UI.helpGesture.textContent = (res.arms_crossed || res.hand_raised) ? "ON" : "OFF";
   UI.confTh.textContent = `${Math.round(CONFIG.fallConfThreshold * 100)}%`;
   UI.timer.textContent = `${Math.round(res.timer)}s`;
 
   if (status !== STATE.lastStatus) {
     if (status === "HELP") {
-      showToast("HELP: Arms Crossed!");
+      showToast("HELP gesture!");
       maybeSendTelegramHelp();
     } else if (status === "EMERGENCY") {
       showToast("EMERGENCY: FALL!");
@@ -698,6 +973,7 @@ async function loop() {
         timer: 0,
         help_active: false,
         arms_crossed: false,
+        hand_raised: false,
       });
       UI.helpGesture.textContent = "OFF";
     }
@@ -705,54 +981,14 @@ async function loop() {
   requestAnimationFrame(loop);
 }
 
-// ====== ROI editor ======
-function attachRoiEvents() {
-  const canvas = UI.roiCanvas;
-  let start = null;
-  const toLocal = (e) => {
-    const r = canvas.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
-  };
-  canvas.addEventListener("mousedown", (e) => {
-    if (!STATE.editingROI) return;
-    start = toLocal(e);
-    STATE.roiDraft = { x: start.x, y: start.y, w: 0, h: 0 };
-    drawROIOverlay();
-  });
-  canvas.addEventListener("mousemove", (e) => {
-    if (!STATE.editingROI || !start) return;
-    const cur = toLocal(e);
-    const x = Math.min(start.x, cur.x);
-    const y = Math.min(start.y, cur.y);
-    const w = Math.abs(cur.x - start.x);
-    const h = Math.abs(cur.y - start.y);
-    STATE.roiDraft = { x, y, w, h };
-    drawROIOverlay();
-  });
-  window.addEventListener("mouseup", () => {
-    if (!STATE.editingROI) return;
-    start = null;
-  });
-  window.addEventListener("resize", syncCanvasSize);
-  UI.roiEdit.addEventListener("click", () => setEditorUI(true));
-  UI.roiCancel.addEventListener("click", () => setEditorUI(false));
-  UI.roiSave.addEventListener("click", () => {
-    if (!STATE.roiDraft) {
-      alert("Gambar ROI dulu dengan drag di atas video.");
-      return;
-    }
-    const roiStream = displayToStream(STATE.roiDraft, canvas);
-    STATE.bedROI = roiStream;
-    saveROI(roiStream);
-    setEditorUI(false);
-    drawROIOverlay();
-    alert("ROI disimpan di perangkat ini.");
-  });
-  UI.roiDelete.addEventListener("click", deleteROI);
-}
+// ====== ROI editor: pasang event ======
+attachRoiEvents();
 
 // ====== Init ======
 async function init() {
+  // load ROI dari localStorage
+  STATE.bedROI = loadROI();
+
   // aktifkan audio setelah satu gesture user
   document.body.addEventListener(
     "click",
@@ -769,9 +1005,6 @@ async function init() {
 
   await initCamera();
   setTimeout(syncCanvasSize, 200);
-
-  attachRoiEvents();
-
   await loadModelLite(); // fixed Lite
   STATE.running = true;
   requestAnimationFrame(loop);

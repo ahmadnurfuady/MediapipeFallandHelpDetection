@@ -1,0 +1,22 @@
+[build]
+  command = "npm ci"
+  functions = "netlify/functions"
+  publish = "."
+
+[[redirects]]
+  from = "/api/tuya/commands"
+  to   = "/.netlify/functions/tuya-commands"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/alarm"
+  to   = "/.netlify/functions/alarm"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/tuya/prewarm"
+  to   = "/.netlify/functions/tuya-prewarm"
+  status = 200
+  force = true

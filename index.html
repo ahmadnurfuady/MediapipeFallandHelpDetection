@@ -97,6 +97,18 @@
     </audio>
     <div id="toast" class="toast hidden">ALERT!</div>
 
+    <!-- config globals untuk client -->
+    <script>
+      // Ganti dengan nilai milikmu. Jika backend di origin berbeda, isi full url seperti "https://your-backend.example.com"
+      window.BACKEND_BASE = 'http://localhost:3000'; // kosong = same-origin, atau 'http://localhost:3000' / production URL
+      window.TUYA_DEVICE_ID = 'a330d051018bae1bedcfmc'; // optional, buat convenience
+      window.WEB_API_KEY = 'super-secret-key'; // optional, jika server require x-web-key
+    </script>
+
+    <!-- include client bridge (harus sebelum app.js agar fungsi tersedia) -->
+    <script type="module" src="./client/alarm_bridge.js"></script>
+
+    <!-- main app -->
     <script type="module" src="./app.js"></script>
   </body>
 </html>

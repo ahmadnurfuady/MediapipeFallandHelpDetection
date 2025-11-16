@@ -1,0 +1,23 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-lock.yaml
+package-lock.json
+
+# Env & secrets
+.env
+*.local
+
+# Build artifacts
+dist/
+build/
+coverage/
+
+# OS/Editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Netlify/CLI cache (opsional)
+.netlify/
