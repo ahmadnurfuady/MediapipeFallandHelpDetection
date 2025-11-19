@@ -8,17 +8,21 @@
   --red: #ff4757;
   --blue: #2d8cff;
   --magenta: #ff6ad5;
+
+  /* Tambahan variabel yang dipakai di kartu dashboard */
+  --card: #121a2a;
+  --accent: #2d8cff;
+  --accent2: #35d07f;
 }
-* {
-  box-sizing: border-box;
-}
+
+* { box-sizing: border-box; }
 body {
   margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial,
-    Noto Sans, sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, sans-serif;
   background: var(--bg);
   color: var(--text);
 }
+
 header {
   display: flex;
   align-items: center;
@@ -27,20 +31,10 @@ header {
   border-bottom: 1px solid #1c2740;
   background: #0d1628;
 }
-header .right {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-h1 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
-h2 {
-  margin: 0 0 12px 0;
-  font-size: 18px;
-}
+header .right { display: flex; gap: 10px; align-items: center; }
+
+h1 { margin: 0; font-size: 20px; font-weight: 600; }
+h2 { margin: 0 0 12px 0; font-size: 18px; }
 h3 {
   margin: 8px 0;
   font-size: 14px;
@@ -67,9 +61,7 @@ h3 {
   border: 1px solid rgba(255, 71, 87, 0.5);
 }
 
-main {
-  padding: 16px;
-}
+main { padding: 16px; }
 .video-section {
   background: var(--panel);
   border: 1px solid #1b2540;
@@ -82,42 +74,27 @@ main {
   width: 100%;
   max-width: 960px;
 }
-#cam {
+#cam, video#inputVideo {
   width: 100%;
   max-height: 60vh;
   border-radius: 8px;
   display: block;
   background: #000;
 }
-#overlay,
-#roi-canvas {
+#overlay, #roi-canvas, canvas#outputCanvas {
   position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
+  left: 0; top: 0;
+  width: 100%; height: 100%;
 }
-#roi-canvas {
-  pointer-events: none;
-}
+#roi-canvas { pointer-events: none; }
 
-.legend {
-  color: var(--muted);
-  font-size: 12px;
-  margin-top: 6px;
-}
+.legend { color: var(--muted); font-size: 12px; margin-top: 6px; }
 
 .roi-toolbar {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-top: 8px;
-  flex-wrap: wrap;
+  display: flex; gap: 10px; align-items: center;
+  margin-top: 8px; flex-wrap: wrap;
 }
-.roi-toolbar .hint {
-  font-size: 12px;
-  color: var(--muted);
-}
+.roi-toolbar .hint { font-size: 12px; color: var(--muted); }
 .roi-toolbar button {
   padding: 6px 10px;
   border-radius: 8px;
@@ -126,38 +103,33 @@ main {
   color: var(--text);
   cursor: pointer;
 }
-.roi-toolbar button.primary {
-  background: #2d8cff;
-  border-color: #2d8cff;
+.roi-toolbar button.primary { background: #2d8cff; border-color: #2d8cff; }
+.roi-toolbar button.danger {
+  background: #ff4757;
+  border-color: #ff4757;
+  color: #fff;
 }
-.roi-toolbar .hidden {
-  display: none;
-}
+.roi-toolbar button.danger:hover { filter: brightness(0.95); }
+.roi-toolbar .hidden { display: none; }
 
-.panels {
-  margin-top: 16px;
-}
+.panels { margin-top: 16px; }
 .panel {
   background: var(--panel);
   border: 1px solid #1b2540;
   border-radius: 12px;
   padding: 14px;
 }
+
 .grid.two {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
 }
 @media (max-width: 900px) {
-  .grid.two {
-    grid-template-columns: 1fr;
-  }
+  .grid.two { grid-template-columns: 1fr; }
 }
-ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
+
+ul { list-style: none; padding: 0; margin: 0; }
 ul#angles li {
   display: flex;
   justify-content: space-between;
@@ -181,9 +153,7 @@ ul#angles li span {
   display: grid;
   gap: 6px;
 }
-.metrics.simple strong {
-  color: var(--text);
-}
+.metrics.simple strong { color: var(--text); }
 
 .toast {
   position: fixed;
@@ -194,18 +164,13 @@ ul#angles li span {
   font-weight: 800;
   padding: 12px 16px;
   border-radius: 10px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
   opacity: 0;
   transform: translateY(10px);
   transition: all 0.25s ease;
 }
-.toast.show {
-  opacity: 1;
-  transform: translateY(0);
-}
-.toast.hidden {
-  display: none;
-}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.hidden { display: none; }
 
 .help {
   margin-top: 12px;
@@ -214,32 +179,84 @@ ul#angles li span {
   border: 1px solid #1a2446;
   border-radius: 8px;
 }
-.help.hidden {
-  display: none;
-}
+.help.hidden { display: none; }
 .help input {
-  width: 70%;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid #2b3b6b;
-  background: #0b162f;
-  color: var(--text);
+  width: 70%; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid #2b3b6b; background: #0b162f; color: var(--text);
 }
 .help button {
-  margin-left: 8px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid #2b3b6b;
-  background: #15244a;
-  color: var(--text);
+  margin-left: 8px; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid #2b3b6b; background: #15244a; color: var(--text);
   cursor: pointer;
 }
-/* Tambahan style untuk tombol delete */
-.roi-toolbar button.danger {
-  background: #ff4757;
-  border-color: #ff4757;
-  color: #fff;
+
+/* Dashboard cards tambahan */
+.wrap { max-width: 900px; width: 100%; margin: 0 auto; }
+p.subtitle {
+  text-align: center;
+  margin-top: 0;
+  margin-bottom: 2.5rem;
+  color: #94a3b8;
 }
-.roi-toolbar button.danger:hover {
-  filter: brightness(0.95);
+.grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit,minmax(260px,1fr));
+}
+.card {
+  background: var(--card);
+  border-radius: 18px;
+  padding: 1.75rem 1.5rem 2rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px -10px rgba(0,0,0,.45);
+  overflow: hidden;
+}
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 80% 20%, rgba(255,255,255,.08), transparent 70%);
+  pointer-events: none;
+}
+.card h2 {
+  margin: 0 0 .75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+.card p {
+  margin: 0 0 1.25rem;
+  line-height: 1.4;
+  font-size: .95rem;
+  color: #cbd5e1;
+}
+.card a {
+  margin-top: auto;
+  text-decoration: none;
+  background: linear-gradient(135deg,var(--accent),#3b82f6);
+  color: #fff;
+  padding: .75rem 1.1rem;
+  font-weight: 600;
+  border-radius: 10px;
+  text-align: center;
+  transition: .25s ease;
+  font-size: .9rem;
+  letter-spacing: .5px;
+  box-shadow: 0 4px 18px -4px rgba(37,99,235,.5);
+}
+.card a.alt {
+  background: linear-gradient(135deg,var(--accent2),#059669);
+  box-shadow: 0 4px 18px -4px rgba(16,185,129,.5);
+}
+.card a:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px -6px rgba(0,0,0,.55);
+}
+footer {
+  margin-top: 3rem;
+  text-align: center;
+  font-size: .75rem;
+  color: #64748b;
+  letter-spacing: .3px;
 }

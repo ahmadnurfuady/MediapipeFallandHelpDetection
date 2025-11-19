@@ -3,7 +3,9 @@ node_modules/
 npm-debug.log*
 yarn-error.log*
 pnpm-lock.yaml
-package-lock.json
+app1.js
+app2.js
+index2.html
 
 # Env & secrets
 .env
