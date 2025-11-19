@@ -82,7 +82,7 @@ async function onDetectedAndNotified(eventType, confVal) {
 
   // trigger Tuya device alarm via backend
   const tuyaCommands = [
-    { code: "alarm_volume", value: "low" },  // gunakan value yang valid untuk device kamu
+    { code: "alarm_volume", value: "high" },  // gunakan value yang valid untuk device kamu
     { code: "alarm_time", value: 1 },
     { code: "alarm_switch", value: true }
   ];
