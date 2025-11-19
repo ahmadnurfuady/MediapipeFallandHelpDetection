@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <title>Fall Detection (Client-side)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Fall Detection client-side: MediaPipe Pose in browser, no server, no RTSP."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Fall Detection (Client-side)</h1>
+      <div class="right">
+        <div id="status-badge" class="status safe">SAFE</div>
+      </div>
+    </header>
+
+    <main>
+      <section class="video-section">
+        <div class="video-wrap">
+          <video id="cam" playsinline autoplay muted></video>
+          <canvas id="overlay"></canvas>
+          <canvas id="roi-canvas"></canvas>
+        </div>
+        <div class="roi-toolbar">
+          <!-- ... di dalam <div class="roi-toolbar"> ... -->
+          <button id="roi-edit" type="button">Edit ROI</button>
+          <button id="roi-save" type="button" class="primary hidden">
+            Save ROI
+          </button>
+          <button id="roi-cancel" type="button" class="hidden">Cancel</button>
+          <button id="roi-delete" type="button" class="danger">
+            Delete ROI
+          </button>
+          <span class="hint"
+            >Tips: klik-drag di video untuk menggambar ROI kasur, lalu Save.
+            Disimpan lokal per device.</span
+          >
+        </div>
+      </section>
+
+      <section class="panels">
+        <div class="panel">
+          <h2>Real-time Feedback & Safety Monitor</h2>
+          <div class="grid two">
+            <div>
+              <h3>Joint Angles Analysis</h3>
+              <ul id="angles">
+                <li>Left Elbow <span>0°</span></li>
+                <li>Right Elbow <span>0°</span></li>
+                <li>Left Shoulder <span>0°</span></li>
+                <li>Right Shoulder <span>0°</span></li>
+                <li>Left Hip <span>0°</span></li>
+                <li>Right Hip <span>0°</span></li>
+                <li>Left Knee <span>0°</span></li>
+                <li>Right Knee <span>0°</span></li>
+              </ul>
+            </div>
+            <div>
+              <h3>Fall Detection System</h3>
+              <div class="metrics simple">
+                <div>
+                  Fall Confidence: <strong id="fall-confidence">0%</strong>
+                </div>
+                <div>
+                  Help Gesture (Arms Crossed):
+                  <strong id="help-gesture">OFF</strong>
+                </div>
+                <div>Status: <strong id="status-text">SAFE</strong></div>
+                <div>
+                  Confidence Threshold: <strong id="conf-th">45%</strong> |
+                  Timer: <strong id="timer">0s</strong>
+                </div>
+              </div>
+              <div id="help-box" class="help hidden">
+                <label for="help-input">Pesan Bantuan:</label>
+                <input id="help-input" type="text" value="TOLONG!" />
+                <button id="help-send" type="button">Kirim</button>
+                <div class="hint">
+                  Muncul otomatis saat Help Gesture terdeteksi.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <audio id="alert-sound">
+      <source
+        src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAaW5mbyAAAAA="
+        type="audio/wav"
+      />
+    </audio>
+    <div id="toast" class="toast hidden">ALERT!</div>
+
+    <!-- config globals untuk client -->
+    <script>
+      // Ganti dengan nilai milikmu. Jika backend di origin berbeda, isi full url seperti "https://your-backend.example.com"
+      window.BACKEND_BASE = ''; // kosong = same-origin, atau 'http://localhost:3000' / production URL
+      window.TUYA_DEVICE_ID = 'a330d051018bae1bedcfmc'; // optional, buat convenience
+      window.WEB_API_KEY = 'super-secret-key'; // optional, jika server require x-web-key
+    </script>
+
+    <!-- include client bridge (harus sebelum app.js agar fungsi tersedia) -->
+    <script type="module" src="./client/alarm_bridge.js"></script>
+
+    <!-- main app -->
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
