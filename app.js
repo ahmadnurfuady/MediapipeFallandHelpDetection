@@ -1,5 +1,5 @@
 // Client-side Fall Detection using MediaPipe Tasks (Pose Landmarker)
-// HELP gesture: Arms Crossed (tangan menyilang di dada) + One-hand Raise-and-Hold.
+// HELP gesture: Waving (melambaikan tangan ke kamera)
 // ROI: Rotated Rectangle (4 sudut bisa di-drag/rotate).
 // Status priority: HELP > EMERGENCY (fall) > SAFE (Sleeping) > SAFE
 // Telegram: via Cloudflare Worker proxy (recommended). Cooldown terpisah HELP dan EMERGENCY.
@@ -49,14 +49,16 @@ const CONFIG = {
   inactivityWindowS: 2.5,
   inactivitySpeedThresh: 18.0, // px/s
   help: {
-    sustainS: 0.4, // arms crossed harus bertahan sekurangnya ini sebelum HELP aktif
+    sustainS: 1.5, // waving harus terdeteksi minimal selama ini
     holdS: 6.0, // lama status HELP dipertahankan
-    clearAfterQuietS: 2.0, // setelah hold dan tidak menyilang lagi dalam periode ini -> clear
+    clearAfterQuietS: 2.0, // setelah hold dan tidak waving lagi dalam periode ini -> clear
   },
-  // One-hand raise-and-hold config
-  raiseHold: {
-    sustainS: 1.2,   // durasi minimal tangan di atas bahu untuk memicu HELP
-    yMargin: 0.05,   // margin (rasio tinggi torso) di atas bahu agar dianggap "di atas"
+  // Waving detection config
+  waving: {
+    minSwings: 2, // minimal jumlah ayunan untuk dianggap waving
+    swingThreshold: 0.15, // threshold pergerakan horizontal (rasio lebar bahu)
+    timeWindow: 2.0, // window waktu untuk menghitung ayunan (detik)
+    handRaisedMinY: 0.1, // tangan harus di atas bahu (margin)
   },
 };
 
@@ -71,15 +73,13 @@ const STATE = {
   inFallWindow: false,
   lastFallTriggerT: null,
 
-  // Arms crossed
-  armsCrossedNow: false,
-  armsCrossedSince: 0,
-  lastArmsCrossedT: 0,
-
-  // One-hand raise-and-hold
-  handRaisedNow: false,
-  handRaisedSince: 0,
-  lastHandRaisedT: 0,
+  // Waving detection state
+  wavingNow: false,
+  wavingSince: 0,
+  lastWavingT: 0,
+  wristHistory: [], // [{t, lx, ly, rx, ry}, ...]
+  swingCount: 0,
+  lastSwingDir: null, // 'left' or 'right'
 
   // HELP state
   helpActive: false,
@@ -149,16 +149,7 @@ function clamp(n, min, max) {
 }
 
 // ====== ROI (Rotated Rectangle dengan 4 Sudut) ======
-const ROI_STORAGE_KEY = 'bed_roi_rrect_v1';
-
-/*
-Format penyimpanan:
-{
-  type: 'rrect',
-  pts: [ {x,y}, {x,y}, {x,y}, {x,y} ]  // urutan searah jarum jam atau ccw
-}
-Semua koordinat dalam ruang stream (CONFIG.streamW x CONFIG.streamH)
-*/
+const ROI_STORAGE_KEY = "bed_roi_rrect_v1";
 
 function dispToStreamPt(p, canvas) {
   const sx = CONFIG.streamW / canvas.width;
@@ -176,7 +167,12 @@ function loadROI() {
   if (!raw) return null;
   try {
     const obj = JSON.parse(raw);
-    if (obj && obj.type === 'rrect' && Array.isArray(obj.pts) && obj.pts.length === 4) {
+    if (
+      obj &&
+      obj.type === "rrect" &&
+      Array.isArray(obj.pts) &&
+      obj.pts.length === 4
+    ) {
       return obj;
     }
   } catch {}
@@ -188,8 +184,8 @@ function saveROI(roi) {
     return;
   }
   const toSave = {
-    type: 'rrect',
-    pts: roi.pts.map(p => ({ x: Math.round(p.x), y: Math.round(p.y) }))
+    type: "rrect",
+    pts: roi.pts.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })),
   };
   localStorage.setItem(ROI_STORAGE_KEY, JSON.stringify(toSave));
 }
@@ -211,23 +207,25 @@ function deleteROI() {
   alert("ROI dihapus.");
 }
 
-// point-in-quad (ray casting) dalam STREAM coords
 function pointInQuad(ptStreamArr) {
   const roi = STATE.bedROI;
-  if (!roi || roi.type !== 'rrect' || roi.pts.length !== 4) return false;
+  if (!roi || roi.type !== "rrect" || roi.pts.length !== 4) return false;
   let inside = false;
   const pts = roi.pts;
-  for (let i=0,j=pts.length-1;i<pts.length;j=i++) {
-    const xi = pts[i].x, yi = pts[i].y;
-    const xj = pts[j].x, yj = pts[j].y;
-    const intersect = ((yi > ptStreamArr[1]) !== (yj > ptStreamArr[1])) &&
-      (ptStreamArr[0] < ((xj - xi) * (ptStreamArr[1] - yi)) / ((yj - yi) || 1e-9) + xi);
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i].x,
+      yi = pts[i].y;
+    const xj = pts[j].x,
+      yj = pts[j].y;
+    const intersect =
+      yi > ptStreamArr[1] !== yj > ptStreamArr[1] &&
+      ptStreamArr[0] <
+        ((xj - xi) * (ptStreamArr[1] - yi)) / (yj - yi || 1e-9) + xi;
     if (intersect) inside = !inside;
   }
   return inside;
 }
 
-// Dipakai oleh fall logic (pt = [x,y] dalam STREAM coords)
 function pointInROI(pt) {
   return pointInQuad(pt);
 }
@@ -243,9 +241,9 @@ function setEditorUI(on) {
 
   if (on) {
     if (STATE.bedROI && STATE.bedROI.type === "rrect") {
-      STATE.roiDraftRRect = STATE.bedROI.pts.map(p => streamToDispPt(p, c));
+      STATE.roiDraftRRect = STATE.bedROI.pts.map((p) => streamToDispPt(p, c));
     } else {
-      STATE.roiDraftRRect = null; // akan dibuat dengan drag pertama
+      STATE.roiDraftRRect = null;
     }
   } else {
     STATE.roiDraftRRect = null;
@@ -285,7 +283,6 @@ function drawROIOverlay() {
     if (STATE.roiDraftRRect && STATE.roiDraftRRect.length === 4) {
       drawCorners(STATE.roiDraftRRect);
     } else if (STATE.roiDraftRRect && STATE.roiDraftRRect.length === 2) {
-      // sedang drag membuat axis-aligned rect awal
       const [a, b] = STATE.roiDraftRRect;
       const rectPts = [
         { x: a.x, y: a.y },
@@ -298,14 +295,16 @@ function drawROIOverlay() {
     return;
   }
 
-  // Mode non-edit: gambar ROI final jika ada
-  if (STATE.bedROI && STATE.bedROI.type === "rrect" && STATE.bedROI.pts.length === 4) {
+  if (
+    STATE.bedROI &&
+    STATE.bedROI.type === "rrect" &&
+    STATE.bedROI.pts.length === 4
+  ) {
     const dispPts = STATE.bedROI.pts.map((p) => streamToDispPt(p, c));
     drawCorners(dispPts);
   }
 }
 
-// helper transform
 function centroid(pts) {
   const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
   const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
@@ -313,9 +312,11 @@ function centroid(pts) {
 }
 function rotateAll(pts, angleRad) {
   const c = centroid(pts);
-  const cos = Math.cos(angleRad), sin = Math.sin(angleRad);
+  const cos = Math.cos(angleRad),
+    sin = Math.sin(angleRad);
   return pts.map((p) => {
-    const dx = p.x - c.x, dy = p.y - c.y;
+    const dx = p.x - c.x,
+      dy = p.y - c.y;
     return { x: c.x + dx * cos - dy * sin, y: c.y + dx * sin + dy * cos };
   });
 }
@@ -334,9 +335,8 @@ function attachRoiEvents() {
     const p = toLocal(e);
 
     if (!STATE.roiDraftRRect) {
-      // mulai buat rect awal (axis-aligned)
       makingRect = true;
-      STATE.roiDraftRRect = [p, p]; // dua titik sementara
+      STATE.roiDraftRRect = [p, p];
       drawROIOverlay();
       return;
     }
@@ -346,12 +346,14 @@ function attachRoiEvents() {
       return;
     }
 
-    // Sudah 4 titik: cek corner yang di-klik
     const pts = STATE.roiDraftRRect;
     let hit = -1;
     for (let i = 0; i < pts.length; i++) {
       const d = Math.hypot(pts[i].x - p.x, pts[i].y - p.y);
-      if (d <= 10) { hit = i; break; }
+      if (d <= 10) {
+        hit = i;
+        break;
+      }
     }
     if (hit >= 0) {
       STATE.roiDragCorner = hit;
@@ -367,7 +369,6 @@ function attachRoiEvents() {
     const p = toLocal(e);
 
     if (STATE.roiDraftRRect && STATE.roiDraftRRect.length === 2 && makingRect) {
-      // update titik kedua
       STATE.roiDraftRRect[1] = p;
       drawROIOverlay();
       return;
@@ -375,16 +376,18 @@ function attachRoiEvents() {
 
     if (STATE.roiDraftRRect && STATE.roiDraftRRect.length === 4) {
       if (STATE.roiDragCorner >= 0) {
-        // drag corner
         const prev = STATE.roiLastMouse || p;
-        const dx = p.x - prev.x, dy = p.y - prev.y;
+        const dx = p.x - prev.x,
+          dy = p.y - prev.y;
         const pts = STATE.roiDraftRRect.slice();
-        pts[STATE.roiDragCorner] = { x: pts[STATE.roiDragCorner].x + dx, y: pts[STATE.roiDragCorner].y + dy };
+        pts[STATE.roiDragCorner] = {
+          x: pts[STATE.roiDragCorner].x + dx,
+          y: pts[STATE.roiDragCorner].y + dy,
+        };
         STATE.roiDraftRRect = pts;
         STATE.roiLastMouse = p;
         drawROIOverlay();
       } else if (STATE.roiLastMouse && e.shiftKey) {
-        // Shift + drag di area: rotasi semua
         const prev = STATE.roiLastMouse;
         const c = centroid(STATE.roiDraftRRect);
         const a1 = Math.atan2(prev.y - c.y, prev.x - c.x);
@@ -491,7 +494,7 @@ function torsoAngleDeg(shoulders_mid, hips_mid) {
   const vy = shoulders_mid[1] - hips_mid[1];
   const mag = Math.hypot(vx, vy);
   if (mag === 0) return 0;
-  const cos_v = vy / mag; // terhadap vertikal
+  const cos_v = vy / mag;
   const angle = (Math.acos(clamp(cos_v, -1, 1)) * 180) / Math.PI;
   return angle;
 }
@@ -529,72 +532,89 @@ function computeAngles(lm) {
   };
 }
 
-// ====== Arms Crossed Detection ======
+// ====== Waving Detection ======
 function dist(a, b) {
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
 }
-function detectArmsCrossed(lm, angles) {
+
+function detectWaving(t, lm) {
   const ls = lm.left_shoulder,
     rs = lm.right_shoulder;
-  const le = lm.left_elbow,
-    re = lm.right_elbow;
   const lw = lm.left_wrist,
     rw = lm.right_wrist;
-  const hips_mid = mid(lm.left_hip, lm.right_hip);
   const shoulders_mid = mid(lm.left_shoulder, lm.right_shoulder);
-  if (!ls || !rs || !lw || !rw || !shoulders_mid || !hips_mid) return false;
+  const hips_mid = mid(lm.left_hip, lm.right_hip);
+
+  if (!ls || !rs || !lw || !rw || !shoulders_mid || !hips_mid) {
+    return false;
+  }
 
   const shoulderW = Math.max(1, dist(ls, rs));
   const torsoH = Math.max(1, dist(shoulders_mid, hips_mid));
-  const midX = shoulders_mid[0];
-  const shY = shoulders_mid[1];
+  const minHandY = shoulders_mid[1] - CONFIG.waving.handRaisedMinY * torsoH;
 
-  const oppSides = (lw[0] - midX) * (rw[0] - midX) < 0;
-  const wristsClose = dist(lw, rw) / shoulderW < 0.7;
+  // Cek apakah minimal satu tangan terangkat
+  const leftRaised = lw[1] < minHandY;
+  const rightRaised = rw[1] < minHandY;
 
-  const minY = shY - 0.2 * torsoH;
-  const maxY = shY + 0.6 * torsoH;
-  const inChestBand =
-    lw[1] >= minY && lw[1] <= maxY && rw[1] >= minY && rw[1] <= maxY;
+  if (!leftRaised && !rightRaised) {
+    // Reset jika tangan tidak terangkat
+    STATE.wristHistory = [];
+    STATE.swingCount = 0;
+    STATE.lastSwingDir = null;
+    return false;
+  }
 
-  const elbowsFlexed =
-    angles.left_elbow &&
-    angles.left_elbow < 120 &&
-    angles.right_elbow &&
-    angles.right_elbow < 120;
+  // Pilih tangan yang terangkat untuk tracking
+  const activeWrist = leftRaised ? lw : rw;
 
-  const nearOppShoulders =
-    dist(lw, rs) / shoulderW < 0.9 && dist(rw, ls) / shoulderW < 0.9;
+  // Simpan history posisi pergelangan tangan
+  STATE.wristHistory.push({
+    t: t,
+    x: activeWrist[0],
+    y: activeWrist[1],
+  });
 
-  const checks = [
-    oppSides,
-    wristsClose,
-    inChestBand,
-    elbowsFlexed,
-    nearOppShoulders,
-  ];
-  const score = checks.filter(Boolean).length;
-  return score >= 3;
-}
+  // Buang data yang terlalu lama
+  const cutoffTime = t - CONFIG.waving.timeWindow;
+  STATE.wristHistory = STATE.wristHistory.filter((h) => h.t >= cutoffTime);
 
-// ====== One-hand Raise-and-Hold Detection ======
-function detectHandRaised(lm, marginRatio = CONFIG.raiseHold.yMargin) {
-  const ls = lm.left_shoulder,
-    rs = lm.right_shoulder;
-  const lw = lm.left_wrist,
-    rw = lm.right_wrist;
-  const hips_mid = mid(lm.left_hip, lm.right_hip);
-  const shoulders_mid = mid(lm.left_shoulder, lm.right_shoulder);
-  if (!ls || !rs || !lw || !rw || !shoulders_mid || !hips_mid)
-    return { raised: false, left: false, right: false };
+  if (STATE.wristHistory.length < 3) {
+    return false;
+  }
 
-  const torsoH = Math.max(1, dist(shoulders_mid, hips_mid));
-  const marginPx = Math.round(torsoH * (marginRatio ?? 0.05));
+  // Deteksi ayunan (swing) kiri-kanan
+  const swingThresholdPx = shoulderW * CONFIG.waving.swingThreshold;
+  const hist = STATE.wristHistory;
 
-  const leftRaised = lw[1] < ls[1] - marginPx;
-  const rightRaised = rw[1] < rs[1] - marginPx;
+  // Cek pergerakan horizontal
+  for (let i = 1; i < hist.length; i++) {
+    const prev = hist[i - 1];
+    const curr = hist[i];
+    const dx = curr.x - prev.x;
 
-  return { raised: leftRaised || rightRaised, left: leftRaised, right: rightRaised };
+    if (Math.abs(dx) > swingThresholdPx) {
+      const currentDir = dx > 0 ? "right" : "left";
+
+      // Jika arah berubah, hitung sebagai satu ayunan
+      if (STATE.lastSwingDir && STATE.lastSwingDir !== currentDir) {
+        STATE.swingCount++;
+      }
+
+      STATE.lastSwingDir = currentDir;
+    }
+  }
+
+  // Reset swing count jika sudah lewat time window
+  if (STATE.wristHistory.length > 0) {
+    const oldestTime = STATE.wristHistory[0].t;
+    if (t - oldestTime >= CONFIG.waving.timeWindow) {
+      STATE.swingCount = 0;
+    }
+  }
+
+  // Waving terdeteksi jika ada minimal N ayunan dalam time window
+  return STATE.swingCount >= CONFIG.waving.minSwings;
 }
 
 // ====== Core update (fall + help) ======
@@ -637,28 +657,16 @@ function updateFall(t, pose) {
     inactive = speedSmooth <= CONFIG.inactivitySpeedThresh;
   }
 
-  // Arms-crossed detection + smoothing
-  const armsCrossed = detectArmsCrossed(lm, angles);
-  if (armsCrossed) {
-    if (!STATE.armsCrossedNow) {
-      STATE.armsCrossedSince = t;
-      STATE.armsCrossedNow = true;
+  // Waving detection + smoothing
+  const waving = detectWaving(t, lm);
+  if (waving) {
+    if (!STATE.wavingNow) {
+      STATE.wavingSince = t;
+      STATE.wavingNow = true;
     }
-    STATE.lastArmsCrossedT = t;
+    STATE.lastWavingT = t;
   } else {
-    STATE.armsCrossedNow = false;
-  }
-
-  // One-hand raise-and-hold detection + smoothing
-  const raise = detectHandRaised(lm);
-  if (raise.raised) {
-    if (!STATE.handRaisedNow) {
-      STATE.handRaisedSince = t;
-      STATE.handRaisedNow = true;
-    }
-    STATE.lastHandRaisedT = t;
-  } else {
-    STATE.handRaisedNow = false;
+    STATE.wavingNow = false;
   }
 
   // Confidence (fall)
@@ -686,25 +694,23 @@ function updateFall(t, pose) {
   if (STATE.inFallWindow && STATE.lastFallTriggerT)
     timer = t - STATE.lastFallTriggerT;
 
-  // HELP trigger:
-  // - arms crossed sustained, OR
-  // - one-hand raise-and-hold sustained
-  const sustainedCross =
-    STATE.armsCrossedNow && t - STATE.armsCrossedSince >= CONFIG.help.sustainS;
-  const sustainedRaise =
-    STATE.handRaisedNow &&
-    t - STATE.handRaisedSince >= (CONFIG.raiseHold?.sustainS ?? 1.2);
+  // HELP trigger: waving sustained
+  const sustainedWaving =
+    STATE.wavingNow && t - STATE.wavingSince >= CONFIG.help.sustainS;
 
-  const hasHelpSignal = sustainedCross || sustainedRaise;
-
-  if (hasHelpSignal) {
-    if (!STATE.helpActive) (STATE.helpActive = true), (STATE.helpSince = t);
+  if (sustainedWaving) {
+    if (!STATE.helpActive) {
+      STATE.helpActive = true;
+      STATE.helpSince = t;
+    }
     STATE.helpExpiresAt = t + CONFIG.help.holdS;
   } else if (STATE.helpActive) {
-    const lastSignalT = Math.max(STATE.lastArmsCrossedT || 0, STATE.lastHandRaisedT || 0);
-    const quiet = t - (lastSignalT || 0);
+    const quiet = t - (STATE.lastWavingT || 0);
     if (t >= STATE.helpExpiresAt && quiet >= CONFIG.help.clearAfterQuietS) {
       STATE.helpActive = false;
+      // Reset waving detection state saat HELP clear
+      STATE.swingCount = 0;
+      STATE.lastSwingDir = null;
     }
   }
 
@@ -715,8 +721,7 @@ function updateFall(t, pose) {
     sleeping,
     timer,
     help_active: STATE.helpActive,
-    arms_crossed: STATE.armsCrossedNow,
-    hand_raised: STATE.handRaisedNow,
+    waving: STATE.wavingNow,
   };
 }
 
@@ -757,18 +762,26 @@ async function maybeSendTelegramHelp() {
   const now = nowS();
   if (now - (STATE.lastHelpSent || 0) < (TELEGRAM.cooldownS || 60)) return;
   const ts = new Date().toLocaleString();
-  const text = ["🟠 HELP: Help gesture detected", `Time: ${ts}`].join("\n");
+  const text = [
+    "🟠 HELP: Waving gesture detected (melambaikan tangan)",
+    `Time: ${ts}`,
+  ].join("\n");
 
   try {
     const sent = await sendTelegram(text);
     if (sent) {
       STATE.lastHelpSent = now;
-      if (typeof window !== 'undefined' && typeof window.onDetectedAndNotified === 'function') {
-        window.onDetectedAndNotified('help').catch(e => console.error('onDetectedAndNotified(help) error', e));
+      if (
+        typeof window !== "undefined" &&
+        typeof window.onDetectedAndNotified === "function"
+      ) {
+        window
+          .onDetectedAndNotified("help")
+          .catch((e) => console.error("onDetectedAndNotified(help) error", e));
       }
     }
   } catch (e) {
-    console.error('maybeSendTelegramHelp error:', e);
+    console.error("maybeSendTelegramHelp error:", e);
   }
 }
 
@@ -787,12 +800,17 @@ async function maybeSendTelegramFall(confVal) {
     const sent = await sendTelegram(text);
     if (sent) {
       STATE.lastFallSent = now;
-      if (typeof window !== 'undefined' && typeof window.onDetectedAndNotified === 'function') {
-        window.onDetectedAndNotified('fall', confVal).catch(e => console.error('onDetectedAndNotified(fall) error', e));
+      if (
+        typeof window !== "undefined" &&
+        typeof window.onDetectedAndNotified === "function"
+      ) {
+        window
+          .onDetectedAndNotified("fall", confVal)
+          .catch((e) => console.error("onDetectedAndNotified(fall) error", e));
       }
     }
   } catch (e) {
-    console.error('maybeSendTelegramFall error:', e);
+    console.error("maybeSendTelegramFall error:", e);
   }
 }
 
@@ -892,13 +910,13 @@ function updateUI(res) {
 
   setStatus(status);
   UI.fallConf.textContent = `${Math.round(res.fall_confidence * 100)}%`;
-  UI.helpGesture.textContent = (res.arms_crossed || res.hand_raised) ? "ON" : "OFF";
+  UI.helpGesture.textContent = res.waving ? "WAVING" : "OFF";
   UI.confTh.textContent = `${Math.round(CONFIG.fallConfThreshold * 100)}%`;
   UI.timer.textContent = `${Math.round(res.timer)}s`;
 
   if (status !== STATE.lastStatus) {
     if (status === "HELP") {
-      showToast("HELP gesture!");
+      showToast("HELP: Waving detected!");
       maybeSendTelegramHelp();
     } else if (status === "EMERGENCY") {
       showToast("EMERGENCY: FALL!");
@@ -972,8 +990,7 @@ async function loop() {
         sleeping: false,
         timer: 0,
         help_active: false,
-        arms_crossed: false,
-        hand_raised: false,
+        waving: false,
       });
       UI.helpGesture.textContent = "OFF";
     }
@@ -986,10 +1003,8 @@ attachRoiEvents();
 
 // ====== Init ======
 async function init() {
-  // load ROI dari localStorage
   STATE.bedROI = loadROI();
 
-  // aktifkan audio setelah satu gesture user
   document.body.addEventListener(
     "click",
     () => {
@@ -1005,7 +1020,7 @@ async function init() {
 
   await initCamera();
   setTimeout(syncCanvasSize, 200);
-  await loadModelLite(); // fixed Lite
+  await loadModelLite();
   STATE.running = true;
   requestAnimationFrame(loop);
 }
