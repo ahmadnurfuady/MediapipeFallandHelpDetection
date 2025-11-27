@@ -1,6 +1,7 @@
 // Integrated Fall Detection & Rehab Medic JavaScript
 // Combines both features with improved state management and controls
 // Includes ROI Transform for Sleeping Detection
+// Extended with Squats, Lateral Raises, and Form Accuracy tracking
 
 import {
   PoseLandmarker,
@@ -44,6 +45,10 @@ const UI = {
   
   // Rehab Medic Info
   rehabInfoPanel: document.getElementById("rehab-info-panel"),
+  exerciseSelect: document.getElementById("exercise-select"),
+  exerciseTitle: document.getElementById("exercise-title"),
+  statLabelLeft: document.getElementById("stat-label-left"),
+  statLabelRight: document.getElementById("stat-label-right"),
   repsLeft: document.getElementById("reps-left"),
   repsRight: document.getElementById("reps-right"),
   stageLeft: document.getElementById("stage-left"),
@@ -53,6 +58,12 @@ const UI = {
   fpsDisplay: document.getElementById("fps-display"),
   poseStatus: document.getElementById("pose-status"),
   resetCounter: document.getElementById("reset-counter"),
+  
+  // Form Accuracy Elements
+  formAccuracyPanel: document.getElementById("form-accuracy-panel"),
+  accuracyValue: document.getElementById("accuracy-value"),
+  meanErrorValue: document.getElementById("mean-error-value"),
+  accuracyBar: document.getElementById("accuracy-bar"),
   
   // Angles Panel
   anglesPanel: document.getElementById("angles-panel"),
@@ -78,6 +89,80 @@ const TELEGRAM = {
   botToken: "",
   chatId: "6376208495",
   cooldownS: 60,
+};
+
+// ========== EXERCISE CONFIGURATIONS ==========
+// Modular exercise configuration for easy addition of new exercises
+const EXERCISES = {
+  bicep_curls: {
+    name: "Bicep Curls",
+    description: "Counter bicep curl untuk kedua tangan",
+    // Track both arms separately
+    trackBothSides: true,
+    labelLeft: "Tangan Kiri",
+    labelRight: "Tangan Kanan",
+    // Angle thresholds for bicep curls (elbow angle: shoulder-elbow-wrist)
+    // Thresholds are slightly different from ideal to allow for transition detection
+    upThreshold: 30,      // Arm curled up position (triggers rep count)
+    downThreshold: 160,   // Arm extended down position (triggers "down" stage)
+    // Ideal angles for form accuracy calculation (target angles for perfect form)
+    idealUpAngle: 30,     // Ideal angle at top of curl (full contraction)
+    idealDownAngle: 160,  // Ideal angle at bottom of curl (matches threshold for consistency)
+    // Counter logic: "down" when angle > downThreshold, "up" transition when angle < upThreshold
+    // downCompare: ">" means stage becomes "down" when angle > downThreshold
+    // upCompare: "<" means stage becomes "up" (and rep counted) when angle < upThreshold
+    downCompare: ">",
+    upCompare: "<",
+    // Joints to track
+    joints: {
+      left: { a: "LEFT_SHOULDER", b: "LEFT_ELBOW", c: "LEFT_WRIST" },
+      right: { a: "RIGHT_SHOULDER", b: "RIGHT_ELBOW", c: "RIGHT_WRIST" },
+    },
+  },
+  squats: {
+    name: "Squats",
+    description: "Counter squat menggunakan sudut lutut",
+    // Track both legs together (combined counter)
+    trackBothSides: false,
+    labelLeft: "Kaki Kiri",
+    labelRight: "Kaki Kanan",
+    // Angle thresholds for squats (knee angle: hip-knee-ankle)
+    upThreshold: 160,     // Standing position (legs straight)
+    downThreshold: 90,    // Squat position (knees bent ~90°)
+    // Ideal angles for form accuracy
+    idealUpAngle: 170,    // Ideal standing angle
+    idealDownAngle: 90,   // Ideal squat depth angle
+    // Counter logic: "down" when angle < downThreshold, "up" transition when angle > upThreshold
+    downCompare: "<",
+    upCompare: ">",
+    // Joints to track
+    joints: {
+      left: { a: "LEFT_HIP", b: "LEFT_KNEE", c: "LEFT_ANKLE" },
+      right: { a: "RIGHT_HIP", b: "RIGHT_KNEE", c: "RIGHT_ANKLE" },
+    },
+  },
+  lateral_raises: {
+    name: "Lateral Raises",
+    description: "Counter lateral raise untuk kedua tangan",
+    // Track both arms separately
+    trackBothSides: true,
+    labelLeft: "Tangan Kiri",
+    labelRight: "Tangan Kanan",
+    // Angle thresholds for lateral raises (shoulder angle: hip-shoulder-elbow)
+    upThreshold: 70,      // Arms raised to shoulder level (~90° but use 70 for detection)
+    downThreshold: 20,    // Arms down at sides
+    // Ideal angles for form accuracy
+    idealUpAngle: 90,     // Ideal raised position (parallel to ground)
+    idealDownAngle: 10,   // Ideal lowered position
+    // Counter logic: "down" when angle < downThreshold, "up" transition when angle > upThreshold
+    downCompare: "<",
+    upCompare: ">",
+    // Joints to track
+    joints: {
+      left: { a: "LEFT_HIP", b: "LEFT_SHOULDER", c: "LEFT_ELBOW" },
+      right: { a: "RIGHT_HIP", b: "RIGHT_SHOULDER", c: "RIGHT_ELBOW" },
+    },
+  },
 };
 
 // ========== CONFIGURATION ==========
@@ -107,11 +192,16 @@ const CONFIG = {
     },
   },
   
-  // Rehab Medic Config
+  // Rehab Medic Config (default values, exercise-specific override these)
   rehab: {
-    upThreshold: 30,
-    downThreshold: 160,
-    angleAlpha: 0.35,
+    angleAlpha: 0.35,  // Smoothing factor for angle EMA
+  },
+  
+  // Form Accuracy Config
+  formAccuracy: {
+    maxAcceptableError: 30, // Maximum error in degrees for 0% accuracy
+    goodThreshold: 85,      // Percentage threshold for "good" form (green)
+    warningThreshold: 60,   // Percentage threshold for "warning" form (yellow)
   },
   
   // ROI Config
@@ -186,14 +276,21 @@ const STATE = {
   
   // Rehab Medic State
   rehab: {
+    currentExercise: "bicep_curls", // Current selected exercise
     repsLeft: 0,
     repsRight: 0,
+    repsCombined: 0,  // For exercises that track both sides together (squats)
     stageLeft: null,
     stageRight: null,
+    stageCombined: null,
     rawAngleLeft: null,
     rawAngleRight: null,
     smoothAngleLeft: null,
     smoothAngleRight: null,
+    // Form accuracy tracking (sliding window of last 100 samples)
+    errorHistory: [],         // Array of errors for mean calculation
+    currentFormAccuracy: null,
+    currentMeanError: null,
   },
 };
 
@@ -846,61 +943,211 @@ function updateFallDetection(t, lmStream) {
 }
 
 // ========== REHAB MEDIC LOGIC ==========
+// Helper function to get joint points from raw landmarks
+function getJointPoints(lmRaw, jointConfig) {
+  const a = getPoint(lmRaw, MP_INDEX[jointConfig.a]);
+  const b = getPoint(lmRaw, MP_INDEX[jointConfig.b]);
+  const c = getPoint(lmRaw, MP_INDEX[jointConfig.c]);
+  return { a, b, c };
+}
+
+// Calculate form error based on current angle and ideal angle
+function calculateFormError(currentAngle, stage, exercise) {
+  if (currentAngle == null || stage == null) return null;
+  
+  // Get the ideal angle based on stage - each exercise has its own ideal values defined in config
+  const idealAngle = stage === "down" ? exercise.idealDownAngle : 
+                     stage === "up" ? exercise.idealUpAngle : null;
+  
+  if (idealAngle == null) return null;
+  
+  return Math.abs(currentAngle - idealAngle);
+}
+
+// Update form accuracy metrics
+function updateFormAccuracy(errorLeft, errorRight, exercise) {
+  const errors = [];
+  if (errorLeft != null) errors.push(errorLeft);
+  if (errorRight != null && exercise.trackBothSides) errors.push(errorRight);
+  
+  if (errors.length === 0) return;
+  
+  const avgError = errors.reduce((a, b) => a + b, 0) / errors.length;
+  
+  // Add to history (sliding window of last 100 samples)
+  STATE.rehab.errorHistory.push(avgError);
+  
+  // Keep only last 100 samples for real-time mean
+  if (STATE.rehab.errorHistory.length > 100) {
+    STATE.rehab.errorHistory.shift();
+  }
+  
+  // Calculate mean error from all samples in history
+  const historySum = STATE.rehab.errorHistory.reduce((a, b) => a + b, 0);
+  STATE.rehab.currentMeanError = historySum / STATE.rehab.errorHistory.length;
+  
+  // Calculate accuracy percentage (inverse of error)
+  // 0° error = 100%, maxAcceptableError = 0%
+  const maxError = CONFIG.formAccuracy.maxAcceptableError;
+  const accuracy = Math.max(0, Math.min(100, 100 - (STATE.rehab.currentMeanError / maxError) * 100));
+  STATE.rehab.currentFormAccuracy = accuracy;
+}
+
+// Helper function to compare angle with threshold based on comparison operator
+function compareAngle(angle, threshold, operator) {
+  switch (operator) {
+    case ">": return angle > threshold;
+    case "<": return angle < threshold;
+    case ">=": return angle >= threshold;
+    case "<=": return angle <= threshold;
+    default: return angle > threshold; // Default to greater-than
+  }
+}
+
+// Process one side (left or right) of an exercise
+function processExerciseSide(lmRaw, exercise, side) {
+  const joints = getJointPoints(lmRaw, exercise.joints[side]);
+  
+  if (!joints.a || !joints.b || !joints.c) {
+    return { angle: null, error: null };
+  }
+  
+  const rawAngleKey = side === "left" ? "rawAngleLeft" : "rawAngleRight";
+  const smoothAngleKey = side === "left" ? "smoothAngleLeft" : "smoothAngleRight";
+  const stageKey = side === "left" ? "stageLeft" : "stageRight";
+  const repsKey = side === "left" ? "repsLeft" : "repsRight";
+  
+  // Calculate angle
+  STATE.rehab[rawAngleKey] = angleBetweenObj(joints.a, joints.b, joints.c);
+  STATE.rehab[smoothAngleKey] = ema(STATE.rehab[smoothAngleKey], STATE.rehab[rawAngleKey], CONFIG.rehab.angleAlpha);
+  
+  // Update stage based on configuration-driven comparison
+  const currentAngle = STATE.rehab[rawAngleKey];
+  
+  // Check if entering "down" stage
+  if (compareAngle(currentAngle, exercise.downThreshold, exercise.downCompare)) {
+    STATE.rehab[stageKey] = "down";
+  }
+  
+  // Check if transitioning to "up" stage (rep counted)
+  if (compareAngle(currentAngle, exercise.upThreshold, exercise.upCompare) && STATE.rehab[stageKey] === "down") {
+    STATE.rehab[stageKey] = "up";
+    STATE.rehab[repsKey]++;
+  }
+  
+  // Calculate form error
+  const error = calculateFormError(currentAngle, STATE.rehab[stageKey], exercise);
+  
+  return { angle: STATE.rehab[smoothAngleKey], error };
+}
+
+// Main rehab exercise update function
 function updateRehabMedic(lmRaw) {
-  const shoulderL = getPoint(lmRaw, MP_INDEX.LEFT_SHOULDER);
-  const elbowL = getPoint(lmRaw, MP_INDEX.LEFT_ELBOW);
-  const wristL = getPoint(lmRaw, MP_INDEX.LEFT_WRIST);
+  const exerciseKey = STATE.rehab.currentExercise;
+  const exercise = EXERCISES[exerciseKey];
   
-  if (shoulderL && elbowL && wristL) {
-    STATE.rehab.rawAngleLeft = angleBetweenObj(shoulderL, elbowL, wristL);
-    STATE.rehab.smoothAngleLeft = ema(STATE.rehab.smoothAngleLeft, STATE.rehab.rawAngleLeft, CONFIG.rehab.angleAlpha);
-    
-    if (STATE.rehab.rawAngleLeft > CONFIG.rehab.downThreshold) {
-      STATE.rehab.stageLeft = "down";
-    }
-    if (STATE.rehab.rawAngleLeft < CONFIG.rehab.upThreshold && STATE.rehab.stageLeft === "down") {
-      STATE.rehab.stageLeft = "up";
-      STATE.rehab.repsLeft++;
-    }
+  if (!exercise) {
+    return {
+      repsLeft: 0,
+      repsRight: 0,
+      repsCombined: 0,
+      stageLeft: null,
+      stageRight: null,
+      stageCombined: null,
+      angleLeft: null,
+      angleRight: null,
+      formAccuracy: null,
+      meanError: null,
+      exerciseName: "Unknown",
+    };
   }
-
-  const shoulderR = getPoint(lmRaw, MP_INDEX.RIGHT_SHOULDER);
-  const elbowR = getPoint(lmRaw, MP_INDEX.RIGHT_ELBOW);
-  const wristR = getPoint(lmRaw, MP_INDEX.RIGHT_WRIST);
   
-  if (shoulderR && elbowR && wristR) {
-    STATE.rehab.rawAngleRight = angleBetweenObj(shoulderR, elbowR, wristR);
-    STATE.rehab.smoothAngleRight = ema(STATE.rehab.smoothAngleRight, STATE.rehab.rawAngleRight, CONFIG.rehab.angleAlpha);
-    
-    if (STATE.rehab.rawAngleRight > CONFIG.rehab.downThreshold) {
-      STATE.rehab.stageRight = "down";
-    }
-    if (STATE.rehab.rawAngleRight < CONFIG.rehab.upThreshold && STATE.rehab.stageRight === "down") {
-      STATE.rehab.stageRight = "up";
-      STATE.rehab.repsRight++;
-    }
+  // Process both sides using the helper function
+  const leftResult = processExerciseSide(lmRaw, exercise, "left");
+  const rightResult = processExerciseSide(lmRaw, exercise, "right");
+  
+  // Update form accuracy
+  updateFormAccuracy(leftResult.error, rightResult.error, exercise);
+  
+  // For exercises that don't track both sides separately (e.g., squats),
+  // use combined counter (whichever detected more)
+  if (!exercise.trackBothSides) {
+    STATE.rehab.repsCombined = Math.max(STATE.rehab.repsLeft, STATE.rehab.repsRight);
+    STATE.rehab.stageCombined = STATE.rehab.stageLeft || STATE.rehab.stageRight;
   }
-
+  
   return {
     repsLeft: STATE.rehab.repsLeft,
     repsRight: STATE.rehab.repsRight,
+    repsCombined: STATE.rehab.repsCombined,
     stageLeft: STATE.rehab.stageLeft,
     stageRight: STATE.rehab.stageRight,
+    stageCombined: STATE.rehab.stageCombined,
     angleLeft: STATE.rehab.smoothAngleLeft,
     angleRight: STATE.rehab.smoothAngleRight,
+    formAccuracy: STATE.rehab.currentFormAccuracy,
+    meanError: STATE.rehab.currentMeanError,
+    exerciseName: exercise.name,
+    trackBothSides: exercise.trackBothSides,
+    labelLeft: exercise.labelLeft,
+    labelRight: exercise.labelRight,
   };
 }
 
 function resetRehabCounter() {
   STATE.rehab.repsLeft = 0;
   STATE.rehab.repsRight = 0;
+  STATE.rehab.repsCombined = 0;
   STATE.rehab.stageLeft = null;
   STATE.rehab.stageRight = null;
+  STATE.rehab.stageCombined = null;
   STATE.rehab.rawAngleLeft = null;
   STATE.rehab.rawAngleRight = null;
   STATE.rehab.smoothAngleLeft = null;
   STATE.rehab.smoothAngleRight = null;
-  updateRehabUI({ repsLeft: 0, repsRight: 0, stageLeft: null, stageRight: null, angleLeft: null, angleRight: null });
+  // Reset form accuracy
+  STATE.rehab.errorHistory = [];
+  STATE.rehab.currentFormAccuracy = null;
+  STATE.rehab.currentMeanError = null;
+  
+  const exercise = EXERCISES[STATE.rehab.currentExercise];
+  updateRehabUI({
+    repsLeft: 0,
+    repsRight: 0,
+    repsCombined: 0,
+    stageLeft: null,
+    stageRight: null,
+    stageCombined: null,
+    angleLeft: null,
+    angleRight: null,
+    formAccuracy: null,
+    meanError: null,
+    exerciseName: exercise ? exercise.name : "Unknown",
+    trackBothSides: exercise ? exercise.trackBothSides : true,
+    labelLeft: exercise ? exercise.labelLeft : "Kiri",
+    labelRight: exercise ? exercise.labelRight : "Kanan",
+  });
+}
+
+// Switch to a different exercise
+function switchExercise(exerciseKey) {
+  if (!EXERCISES[exerciseKey]) return;
+  
+  STATE.rehab.currentExercise = exerciseKey;
+  resetRehabCounter();
+  
+  const exercise = EXERCISES[exerciseKey];
+  
+  // Update UI labels
+  if (UI.exerciseTitle) {
+    UI.exerciseTitle.textContent = exercise.name;
+  }
+  if (UI.statLabelLeft) {
+    UI.statLabelLeft.textContent = exercise.labelLeft;
+  }
+  if (UI.statLabelRight) {
+    UI.statLabelRight.textContent = exercise.labelRight;
+  }
 }
 
 // ========== TELEGRAM HELPERS ==========
@@ -1049,12 +1296,68 @@ function updateFallUI(res) {
 }
 
 function updateRehabUI(res) {
-  UI.repsLeft.textContent = res.repsLeft;
-  UI.repsRight.textContent = res.repsRight;
-  UI.stageLeft.textContent = res.stageLeft || "-";
-  UI.stageRight.textContent = res.stageRight || "-";
+  // Update reps - for non-trackBothSides exercises, show combined reps in both cards
+  if (res.trackBothSides === false) {
+    UI.repsLeft.textContent = res.repsCombined || 0;
+    UI.repsRight.textContent = res.repsCombined || 0;
+    UI.stageLeft.textContent = res.stageCombined || "-";
+    UI.stageRight.textContent = res.stageCombined || "-";
+  } else {
+    UI.repsLeft.textContent = res.repsLeft;
+    UI.repsRight.textContent = res.repsRight;
+    UI.stageLeft.textContent = res.stageLeft || "-";
+    UI.stageRight.textContent = res.stageRight || "-";
+  }
+  
   UI.angleLeft.textContent = res.angleLeft != null ? Math.round(res.angleLeft) : "-";
   UI.angleRight.textContent = res.angleRight != null ? Math.round(res.angleRight) : "-";
+  
+  // Update form accuracy display
+  if (UI.accuracyValue) {
+    if (res.formAccuracy != null) {
+      const accuracy = Math.round(res.formAccuracy);
+      UI.accuracyValue.textContent = `${accuracy}%`;
+      
+      // Color coding based on accuracy
+      UI.accuracyValue.classList.remove("warning", "poor");
+      if (accuracy < CONFIG.formAccuracy.warningThreshold) {
+        UI.accuracyValue.classList.add("poor");
+      } else if (accuracy < CONFIG.formAccuracy.goodThreshold) {
+        UI.accuracyValue.classList.add("warning");
+      }
+    } else {
+      UI.accuracyValue.textContent = "-";
+      UI.accuracyValue.classList.remove("warning", "poor");
+    }
+  }
+  
+  // Update mean error display
+  if (UI.meanErrorValue) {
+    if (res.meanError != null) {
+      UI.meanErrorValue.textContent = `${res.meanError.toFixed(1)}°`;
+    } else {
+      UI.meanErrorValue.textContent = "-";
+    }
+  }
+  
+  // Update accuracy bar
+  if (UI.accuracyBar) {
+    if (res.formAccuracy != null) {
+      const accuracy = Math.round(res.formAccuracy);
+      UI.accuracyBar.style.width = `${accuracy}%`;
+      
+      // Color coding for bar
+      UI.accuracyBar.classList.remove("warning", "poor");
+      if (accuracy < CONFIG.formAccuracy.warningThreshold) {
+        UI.accuracyBar.classList.add("poor");
+      } else if (accuracy < CONFIG.formAccuracy.goodThreshold) {
+        UI.accuracyBar.classList.add("warning");
+      }
+    } else {
+      UI.accuracyBar.style.width = "0%";
+      UI.accuracyBar.classList.remove("warning", "poor");
+    }
+  }
 }
 
 function updateAnglesUI(angles) {
@@ -1284,7 +1587,8 @@ UI.toggleRehab.addEventListener("change", (e) => {
   updateFeatureToggles();
   
   if (STATE.rehabActive) {
-    setStatusText("Rehab Medic aktif");
+    const exercise = EXERCISES[STATE.rehab.currentExercise];
+    setStatusText(`Rehab Medic aktif - ${exercise ? exercise.name : "Unknown"}`);
   } else if (STATE.fallDetectionActive) {
     setStatusText("Fall Detection aktif");
   } else {
@@ -1293,6 +1597,17 @@ UI.toggleRehab.addEventListener("change", (e) => {
 });
 
 UI.resetCounter.addEventListener("click", resetRehabCounter);
+
+// Exercise selector event handler
+if (UI.exerciseSelect) {
+  UI.exerciseSelect.addEventListener("change", (e) => {
+    switchExercise(e.target.value);
+    if (STATE.rehabActive) {
+      const exercise = EXERCISES[e.target.value];
+      setStatusText(`Rehab Medic aktif - ${exercise ? exercise.name : "Unknown"}`);
+    }
+  });
+}
 
 // Handle window resize
 window.addEventListener("resize", () => {
@@ -1316,6 +1631,17 @@ function init() {
   
   // Attach ROI events
   attachRoiEvents();
+  
+  // Initialize exercise selector with default exercise
+  if (UI.exerciseSelect) {
+    UI.exerciseSelect.value = STATE.rehab.currentExercise;
+    const exercise = EXERCISES[STATE.rehab.currentExercise];
+    if (exercise) {
+      if (UI.exerciseTitle) UI.exerciseTitle.textContent = exercise.name;
+      if (UI.statLabelLeft) UI.statLabelLeft.textContent = exercise.labelLeft;
+      if (UI.statLabelRight) UI.statLabelRight.textContent = exercise.labelRight;
+    }
+  }
   
   setStatusText("Kamera belum aktif");
   updateFeatureToggles();
