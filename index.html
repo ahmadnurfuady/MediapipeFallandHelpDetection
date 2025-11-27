@@ -8,6 +8,11 @@
   <link rel="stylesheet" href="styles.css" />
   <style>
     /* Integrated page specific styles */
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+    
     .integrated-container {
       display: grid;
       grid-template-columns: 1fr 400px;
@@ -15,11 +20,20 @@
       padding: 16px;
       max-width: 1600px;
       margin: 0 auto;
+      height: calc(100vh - 60px); /* Account for header height */
+      overflow: hidden;
     }
     
     @media (max-width: 1100px) {
       .integrated-container {
         grid-template-columns: 1fr;
+        height: auto;
+        overflow: visible;
+      }
+      
+      html, body {
+        height: auto;
+        overflow: auto;
       }
     }
     
@@ -29,6 +43,21 @@
       border-radius: 12px;
       padding: 12px;
       min-height: 400px;
+      position: sticky;
+      top: 16px;
+      align-self: start;
+      max-height: calc(100vh - 92px); /* Account for header and padding */
+      overflow: hidden;
+    }
+    
+    @media (max-width: 1100px) {
+      .camera-section {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        max-height: 50vh;
+        min-height: 280px;
+      }
     }
     
     .camera-container {
@@ -81,6 +110,37 @@
       display: flex;
       flex-direction: column;
       gap: 16px;
+      overflow-y: auto;
+      max-height: calc(100vh - 92px); /* Account for header and padding */
+      padding-right: 8px;
+      scrollbar-width: thin;
+      scrollbar-color: #2b3b6b #15244a;
+    }
+    
+    .controls-section::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .controls-section::-webkit-scrollbar-track {
+      background: #15244a;
+      border-radius: 4px;
+    }
+    
+    .controls-section::-webkit-scrollbar-thumb {
+      background: #2b3b6b;
+      border-radius: 4px;
+    }
+    
+    .controls-section::-webkit-scrollbar-thumb:hover {
+      background: #3b4b7b;
+    }
+    
+    @media (max-width: 1100px) {
+      .controls-section {
+        max-height: none;
+        overflow-y: visible;
+        padding-right: 0;
+      }
     }
     
     /* Toggle switch styles */
@@ -641,6 +701,11 @@
       display: none;
     }
     
+    /* Generic hidden class */
+    .hidden {
+      display: none !important;
+    }
+    
     /* Rehab controls */
     .rehab-controls {
       margin-top: 12px;
@@ -672,6 +737,407 @@
     
     .rehab-controls button.danger:hover {
       background: #e03e4d;
+    }
+    
+    /* ========== REHAB MODE STYLES ========== */
+    .rehab-mode-hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin: 0 0 12px 0;
+    }
+    
+    .exercise-queue-container {
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    
+    .exercise-queue {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .exercise-queue:empty::after {
+      content: "Belum ada latihan. Tambahkan latihan di bawah.";
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      padding: 20px;
+    }
+    
+    .exercise-queue-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: #15244a;
+      border: 1px solid #2b3b6b;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    
+    .exercise-queue-item .order-num {
+      width: 24px;
+      height: 24px;
+      background: var(--blue);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    
+    .exercise-queue-item .exercise-name {
+      flex: 1;
+      font-weight: 600;
+      color: var(--text);
+    }
+    
+    .exercise-queue-item .exercise-reps {
+      color: var(--orange);
+      font-weight: 700;
+    }
+    
+    .exercise-queue-item .move-btns {
+      display: flex;
+      gap: 4px;
+    }
+    
+    .exercise-queue-item .move-btns button {
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border: 1px solid #2b3b6b;
+      background: #0e1730;
+      color: var(--muted);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .exercise-queue-item .move-btns button:hover {
+      background: #1c2f5a;
+      color: var(--text);
+    }
+    
+    .exercise-queue-item .remove-btn {
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border: 1px solid var(--red);
+      background: transparent;
+      color: var(--red);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .exercise-queue-item .remove-btn:hover {
+      background: var(--red);
+      color: white;
+    }
+    
+    .add-exercise-form {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    
+    .add-exercise-form select,
+    .add-exercise-form input {
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid #2b3b6b;
+      background: #15244a;
+      color: var(--text);
+      font-size: 13px;
+    }
+    
+    .add-exercise-form select {
+      flex: 1;
+      min-width: 120px;
+    }
+    
+    .add-exercise-form input {
+      width: 70px;
+    }
+    
+    .add-exercise-form button.primary {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--blue);
+      background: var(--blue);
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    
+    .add-exercise-form button.primary:hover {
+      filter: brightness(1.1);
+    }
+    
+    .rehab-mode-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    
+    .rehab-mode-actions button {
+      flex: 1;
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .rehab-mode-actions button.success {
+      background: var(--green);
+      color: #000;
+    }
+    
+    .rehab-mode-actions button.success:hover:not(:disabled) {
+      filter: brightness(1.1);
+    }
+    
+    .rehab-mode-actions button.success:disabled {
+      background: #1a2446;
+      color: var(--muted);
+      cursor: not-allowed;
+    }
+    
+    .rehab-mode-actions button.danger {
+      background: var(--red);
+      color: white;
+    }
+    
+    .rehab-mode-actions button.danger:hover {
+      filter: brightness(0.9);
+    }
+    
+    /* Rehab Mode Active Panel Styles */
+    .current-exercise-display {
+      background: linear-gradient(135deg, #1a2a55, #0e1730);
+      border: 2px solid var(--blue);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    
+    .current-exercise-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    
+    .current-exercise-name {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+    
+    .current-exercise-progress {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+    }
+    
+    .current-exercise-progress span {
+      font-size: 14px;
+      color: var(--muted);
+    }
+    
+    .current-exercise-progress .progress-left strong {
+      color: var(--orange);
+      font-size: 18px;
+    }
+    
+    .current-exercise-progress .progress-right strong {
+      color: var(--blue);
+      font-size: 18px;
+    }
+    
+    .progress-queue {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    
+    .progress-queue-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    
+    .progress-queue-item.current {
+      border-color: var(--blue);
+      background: #152544;
+    }
+    
+    .progress-queue-item.completed {
+      border-color: var(--green);
+      opacity: 0.7;
+    }
+    
+    .progress-queue-item .status-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    
+    .progress-queue-item .status-icon.pending {
+      background: #1a2446;
+      color: var(--muted);
+    }
+    
+    .progress-queue-item .status-icon.active {
+      background: var(--blue);
+      color: white;
+    }
+    
+    .progress-queue-item .status-icon.done {
+      background: var(--green);
+      color: white;
+    }
+    
+    .progress-queue-item .exercise-info {
+      flex: 1;
+    }
+    
+    .progress-queue-item .exercise-info .name {
+      font-weight: 600;
+      color: var(--text);
+    }
+    
+    .progress-queue-item .exercise-info .reps {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    
+    .rehab-mode-stats {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    
+    .rehab-stat-mini {
+      flex: 1;
+      padding: 10px;
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 12px;
+    }
+    
+    .rehab-stat-mini span {
+      display: block;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    
+    .rehab-stat-mini strong {
+      font-size: 20px;
+      color: var(--text);
+    }
+    
+    /* Rehab Mode Complete Panel */
+    .rehab-complete-message {
+      text-align: center;
+      padding: 20px;
+    }
+    
+    .complete-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+    
+    .rehab-complete-message h3 {
+      color: var(--green);
+      font-size: 24px;
+      margin: 0 0 8px 0;
+      text-transform: none;
+    }
+    
+    .rehab-complete-message p {
+      color: var(--muted);
+      font-size: 14px;
+      margin: 0 0 16px 0;
+    }
+    
+    .rehab-complete-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 16px;
+      text-align: left;
+    }
+    
+    .rehab-complete-stats .stat-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #0e1730;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    
+    .rehab-complete-stats .stat-item span:first-child {
+      color: var(--muted);
+    }
+    
+    .rehab-complete-stats .stat-item span:last-child {
+      color: var(--green);
+      font-weight: 700;
+    }
+    
+    #restart-rehab-btn {
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: none;
+      background: var(--green);
+      color: #000;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    
+    #restart-rehab-btn:hover {
+      filter: brightness(1.1);
     }
     
     /* Responsive */
@@ -820,50 +1286,137 @@
             <option value="bicep_curls">Bicep Curls</option>
             <option value="squats">Squats</option>
             <option value="lateral_raises">Lateral Raises</option>
+            <option value="rehab_mode">🎯 Rehab Mode</option>
           </select>
         </div>
         
-        <h3 id="exercise-title">Bicep Curls</h3>
-        
-        <!-- Form Accuracy Display -->
-        <div class="form-accuracy-panel" id="form-accuracy-panel">
-          <div class="accuracy-display">
-            <span class="accuracy-label">Form Accuracy</span>
-            <span class="accuracy-value" id="accuracy-value">-</span>
-          </div>
-          <div class="mean-error-display">
-            <span class="error-label">Mean Error:</span>
-            <span class="error-value" id="mean-error-value">-</span>
-          </div>
-          <div class="accuracy-bar-container">
-            <div class="accuracy-bar" id="accuracy-bar"></div>
-          </div>
-        </div>
-        
-        <div class="rehab-stats">
-          <div class="rehab-stat-card left">
-            <h4 id="stat-label-left">Tangan Kiri</h4>
-            <div class="reps" id="reps-left">0</div>
-            <div class="details">
-              <span>Stage: <strong id="stage-left">-</strong></span>
-              <span>Angle: <strong id="angle-left">-</strong>°</span>
+        <!-- Standard Exercise Display (shown when not in rehab mode) -->
+        <div id="standard-exercise-panel">
+          <h3 id="exercise-title">Bicep Curls</h3>
+          
+          <!-- Form Accuracy Display -->
+          <div class="form-accuracy-panel" id="form-accuracy-panel">
+            <div class="accuracy-display">
+              <span class="accuracy-label">Form Accuracy</span>
+              <span class="accuracy-value" id="accuracy-value">-</span>
+            </div>
+            <div class="mean-error-display">
+              <span class="error-label">Mean Error:</span>
+              <span class="error-value" id="mean-error-value">-</span>
+            </div>
+            <div class="accuracy-bar-container">
+              <div class="accuracy-bar" id="accuracy-bar"></div>
             </div>
           </div>
-          <div class="rehab-stat-card right">
-            <h4 id="stat-label-right">Tangan Kanan</h4>
-            <div class="reps" id="reps-right">0</div>
-            <div class="details">
-              <span>Stage: <strong id="stage-right">-</strong></span>
-              <span>Angle: <strong id="angle-right">-</strong>°</span>
+          
+          <div class="rehab-stats">
+            <div class="rehab-stat-card left">
+              <h4 id="stat-label-left">Tangan Kiri</h4>
+              <div class="reps" id="reps-left">0</div>
+              <div class="details">
+                <span>Stage: <strong id="stage-left">-</strong></span>
+                <span>Angle: <strong id="angle-left">-</strong>°</span>
+              </div>
+            </div>
+            <div class="rehab-stat-card right">
+              <h4 id="stat-label-right">Tangan Kanan</h4>
+              <div class="reps" id="reps-right">0</div>
+              <div class="details">
+                <span>Stage: <strong id="stage-right">-</strong></span>
+                <span>Angle: <strong id="angle-right">-</strong>°</span>
+              </div>
             </div>
           </div>
+          <div class="rehab-extra-info">
+            <span>FPS: <strong id="fps-display">-</strong></span>
+            <span>Pose: <strong id="pose-status">-</strong></span>
+          </div>
+          <div class="rehab-controls">
+            <button id="reset-counter" class="danger">Reset Counter</button>
+          </div>
         </div>
-        <div class="rehab-extra-info">
-          <span>FPS: <strong id="fps-display">-</strong></span>
-          <span>Pose: <strong id="pose-status">-</strong></span>
+
+        <!-- Rehab Mode Setup Panel (shown when rehab_mode is selected) -->
+        <div id="rehab-mode-setup" class="hidden">
+          <h3>🎯 Rehab Mode - Setup</h3>
+          <p class="rehab-mode-hint">Tambahkan latihan dan atur urutan serta repetisi.</p>
+          
+          <!-- Exercise Queue -->
+          <div class="exercise-queue-container">
+            <div class="exercise-queue" id="exercise-queue">
+              <!-- Exercise items will be added here dynamically -->
+            </div>
+            
+            <!-- Add Exercise Form -->
+            <div class="add-exercise-form">
+              <select id="add-exercise-type">
+                <option value="bicep_curls">Bicep Curls</option>
+                <option value="squats">Squats</option>
+                <option value="lateral_raises">Lateral Raises</option>
+              </select>
+              <input type="number" id="add-exercise-reps" min="1" max="100" value="10" placeholder="Reps" />
+              <button id="add-exercise-btn" class="primary">+ Tambah</button>
+            </div>
+          </div>
+          
+          <div class="rehab-mode-actions">
+            <button id="start-rehab-btn" class="success" disabled>▶ Mulai Rehab</button>
+            <button id="clear-queue-btn" class="danger">Hapus Semua</button>
+          </div>
         </div>
-        <div class="rehab-controls">
-          <button id="reset-counter" class="danger">Reset Counter</button>
+
+        <!-- Rehab Mode Active Panel (shown when rehab workout is in progress) -->
+        <div id="rehab-mode-active" class="hidden">
+          <h3>🎯 Rehab Mode - Aktif</h3>
+          
+          <!-- Current Exercise Display -->
+          <div class="current-exercise-display">
+            <div class="current-exercise-label">Latihan Saat Ini:</div>
+            <div class="current-exercise-name" id="current-exercise-name">-</div>
+            <div class="current-exercise-progress" id="current-exercise-progress">
+              <span class="progress-left">Kiri: <strong id="rehab-progress-left">0</strong>/<span id="rehab-target-left">0</span></span>
+              <span class="progress-right">Kanan: <strong id="rehab-progress-right">0</strong>/<span id="rehab-target-right">0</span></span>
+            </div>
+          </div>
+          
+          <!-- Progress Queue -->
+          <div class="progress-queue" id="progress-queue">
+            <!-- Exercise progress items will be shown here -->
+          </div>
+          
+          <!-- Rehab Mode Stats -->
+          <div class="rehab-mode-stats">
+            <div class="rehab-stat-mini">
+              <span>Total Latihan:</span>
+              <strong id="rehab-total-exercises">0</strong>
+            </div>
+            <div class="rehab-stat-mini">
+              <span>Selesai:</span>
+              <strong id="rehab-completed-exercises">0</strong>
+            </div>
+          </div>
+          
+          <div class="rehab-extra-info">
+            <span>FPS: <strong id="fps-display-rehab">-</strong></span>
+            <span>Pose: <strong id="pose-status-rehab">-</strong></span>
+          </div>
+          
+          <div class="rehab-mode-actions">
+            <button id="reset-rehab-btn" class="danger">Reset Rehab</button>
+          </div>
+        </div>
+
+        <!-- Rehab Mode Complete Panel -->
+        <div id="rehab-mode-complete" class="hidden">
+          <div class="rehab-complete-message">
+            <div class="complete-icon">🎉</div>
+            <h3>Rehab Selesai!</h3>
+            <p>Semua latihan telah selesai. Kerja bagus!</p>
+            <div class="rehab-complete-stats" id="rehab-complete-stats">
+              <!-- Stats will be populated here -->
+            </div>
+            <button id="restart-rehab-btn" class="success">🔄 Mulai Ulang</button>
+          </div>
         </div>
       </div>
 
