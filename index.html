@@ -424,6 +424,119 @@
       color: var(--text);
     }
     
+    /* Exercise Selector */
+    .exercise-selector {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding: 10px 14px;
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 10px;
+    }
+    
+    .exercise-selector label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    
+    .exercise-selector select {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid #2b3b6b;
+      background: #15244a;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    
+    .exercise-selector select:focus {
+      outline: none;
+      border-color: var(--blue);
+    }
+    
+    /* Form Accuracy Panel */
+    .form-accuracy-panel {
+      margin-bottom: 14px;
+      padding: 14px;
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 10px;
+    }
+    
+    .accuracy-display {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .accuracy-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    
+    .accuracy-value {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--green);
+    }
+    
+    .accuracy-value.warning {
+      color: var(--orange);
+    }
+    
+    .accuracy-value.poor {
+      color: var(--red);
+    }
+    
+    .mean-error-display {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+    
+    .error-label {
+      color: var(--muted);
+    }
+    
+    .error-value {
+      font-weight: 700;
+      color: var(--text);
+    }
+    
+    .accuracy-bar-container {
+      height: 6px;
+      background: #1a2446;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    
+    .accuracy-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--green), var(--green));
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.3s ease, background 0.3s ease;
+    }
+    
+    .accuracy-bar.warning {
+      background: linear-gradient(90deg, var(--orange), var(--orange));
+    }
+    
+    .accuracy-bar.poor {
+      background: linear-gradient(90deg, var(--red), var(--red));
+    }
+    
     /* Angles panel */
     .angles-panel {
       background: var(--panel);
@@ -646,7 +759,7 @@
           <div class="toggle-item disabled" id="rehab-toggle-item">
             <div class="toggle-label">
               <span>Rehab Medic</span>
-              <small>Counter bicep curl</small>
+              <small>Bicep Curls, Squats, Lateral Raises</small>
             </div>
             <label class="toggle-switch orange">
               <input type="checkbox" id="toggle-rehab" />
@@ -700,10 +813,36 @@
 
       <!-- Rehab Medic Info Panel -->
       <div class="info-panel hidden" id="rehab-info-panel">
-        <h3>Bicep Curl Counter</h3>
+        <!-- Exercise Selector -->
+        <div class="exercise-selector">
+          <label for="exercise-select">Pilih Latihan:</label>
+          <select id="exercise-select">
+            <option value="bicep_curls">Bicep Curls</option>
+            <option value="squats">Squats</option>
+            <option value="lateral_raises">Lateral Raises</option>
+          </select>
+        </div>
+        
+        <h3 id="exercise-title">Bicep Curls</h3>
+        
+        <!-- Form Accuracy Display -->
+        <div class="form-accuracy-panel" id="form-accuracy-panel">
+          <div class="accuracy-display">
+            <span class="accuracy-label">Form Accuracy</span>
+            <span class="accuracy-value" id="accuracy-value">-</span>
+          </div>
+          <div class="mean-error-display">
+            <span class="error-label">Mean Error:</span>
+            <span class="error-value" id="mean-error-value">-</span>
+          </div>
+          <div class="accuracy-bar-container">
+            <div class="accuracy-bar" id="accuracy-bar"></div>
+          </div>
+        </div>
+        
         <div class="rehab-stats">
           <div class="rehab-stat-card left">
-            <h4>Tangan Kiri</h4>
+            <h4 id="stat-label-left">Tangan Kiri</h4>
             <div class="reps" id="reps-left">0</div>
             <div class="details">
               <span>Stage: <strong id="stage-left">-</strong></span>
@@ -711,7 +850,7 @@
             </div>
           </div>
           <div class="rehab-stat-card right">
-            <h4>Tangan Kanan</h4>
+            <h4 id="stat-label-right">Tangan Kanan</h4>
             <div class="reps" id="reps-right">0</div>
             <div class="details">
               <span>Stage: <strong id="stage-right">-</strong></span>
