@@ -1,5 +1,6 @@
 // Integrated Fall Detection & Rehab Medic JavaScript
 // Combines both features with improved state management and controls
+// Includes ROI Transform for Sleeping Detection
 
 import {
   PoseLandmarker,
@@ -11,10 +12,12 @@ const UI = {
   // Camera
   video: document.getElementById("video"),
   overlay: document.getElementById("overlay"),
+  roiCanvas: document.getElementById("roi-canvas"),
   cameraContainer: document.getElementById("camera-container"),
   cameraPlaceholder: document.getElementById("camera-placeholder"),
   loadingOverlay: document.getElementById("loading-overlay"),
   statusText: document.getElementById("status-text"),
+  statusBadge: document.getElementById("status-badge"),
   
   // Toggles
   toggleCamera: document.getElementById("toggle-camera"),
@@ -23,11 +26,20 @@ const UI = {
   fallToggleItem: document.getElementById("fall-toggle-item"),
   rehabToggleItem: document.getElementById("rehab-toggle-item"),
   
+  // ROI Panel
+  roiPanel: document.getElementById("roi-panel"),
+  roiEdit: document.getElementById("roi-edit"),
+  roiSave: document.getElementById("roi-save"),
+  roiCancel: document.getElementById("roi-cancel"),
+  roiDelete: document.getElementById("roi-delete"),
+  roiStatusText: document.getElementById("roi-status-text"),
+  
   // Fall Detection Info
   fallInfoPanel: document.getElementById("fall-info-panel"),
   fallStatus: document.getElementById("fall-status"),
   fallConfidence: document.getElementById("fall-confidence"),
   helpGesture: document.getElementById("help-gesture"),
+  sleepingStatus: document.getElementById("sleeping-status"),
   fallTimer: document.getElementById("fall-timer"),
   
   // Rehab Medic Info
@@ -111,6 +123,9 @@ function emaFactory(alpha = 0.3) {
   };
 }
 
+// ========== ROI STORAGE KEY ==========
+const ROI_STORAGE_KEY = "bed_roi_rrect_v1";
+
 // ========== STATE MANAGEMENT ==========
 const STATE = {
   // System state
@@ -124,6 +139,13 @@ const STATE = {
   // FPS tracking
   lastFrameT: performance.now(),
   fpsHistory: [],
+  
+  // ROI state for sleeping detection
+  editingROI: false,
+  roiDraftRRect: null,
+  roiDragCorner: -1,
+  roiLastMouse: null,
+  bedROI: null,
   
   // Fall Detection State
   fall: {
@@ -213,6 +235,310 @@ function dist(a, b) {
 
 function nowS() {
   return Date.now() / 1000;
+}
+
+// ========== ROI UTILITY FUNCTIONS ==========
+function dispToStreamPt(p, canvas) {
+  const sx = CONFIG.streamW / canvas.width;
+  const sy = CONFIG.streamH / canvas.height;
+  return { x: Math.round(p.x * sx), y: Math.round(p.y * sy) };
+}
+
+function streamToDispPt(p, canvas) {
+  const sx = canvas.width / CONFIG.streamW;
+  const sy = canvas.height / CONFIG.streamH;
+  return { x: Math.round(p.x * sx), y: Math.round(p.y * sy) };
+}
+
+function loadROI() {
+  const raw = localStorage.getItem(ROI_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    const obj = JSON.parse(raw);
+    if (obj && obj.type === "rrect" && Array.isArray(obj.pts) && obj.pts.length === 4) {
+      return obj;
+    }
+  } catch {}
+  return null;
+}
+
+function saveROI(roi) {
+  if (!roi) {
+    localStorage.removeItem(ROI_STORAGE_KEY);
+    return;
+  }
+  const toSave = {
+    type: "rrect",
+    pts: roi.pts.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })),
+  };
+  localStorage.setItem(ROI_STORAGE_KEY, JSON.stringify(toSave));
+}
+
+function deleteROI() {
+  const hasROI = !!STATE.bedROI;
+  const hasDraft = !!STATE.roiDraftRRect;
+  if (!hasROI && !hasDraft) {
+    alert("Tidak ada ROI yang tersimpan.");
+    return;
+  }
+  if (!confirm("Hapus ROI?")) return;
+
+  STATE.bedROI = null;
+  STATE.roiDraftRRect = null;
+  saveROI(null);
+  setEditorUI(false);
+  drawROIOverlay();
+  updateROIStatus();
+  alert("ROI dihapus.");
+}
+
+function pointInQuad(ptStreamArr) {
+  const roi = STATE.bedROI;
+  if (!roi || roi.type !== "rrect" || roi.pts.length !== 4) return false;
+  let inside = false;
+  const pts = roi.pts;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i].x, yi = pts[i].y;
+    const xj = pts[j].x, yj = pts[j].y;
+    const intersect = yi > ptStreamArr[1] !== yj > ptStreamArr[1] &&
+      ptStreamArr[0] < ((xj - xi) * (ptStreamArr[1] - yi)) / (yj - yi || 1e-9) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInROI(pt) {
+  return pointInQuad(pt);
+}
+
+function setEditorUI(on) {
+  STATE.editingROI = on;
+  if (UI.roiEdit) UI.roiEdit.classList.toggle("hidden", on);
+  if (UI.roiSave) UI.roiSave.classList.toggle("hidden", !on);
+  if (UI.roiCancel) UI.roiCancel.classList.toggle("hidden", !on);
+  if (UI.roiCanvas) UI.roiCanvas.style.pointerEvents = on ? "auto" : "none";
+
+  const c = UI.roiCanvas;
+  if (!c) return;
+
+  if (on) {
+    if (STATE.bedROI && STATE.bedROI.type === "rrect") {
+      STATE.roiDraftRRect = STATE.bedROI.pts.map((p) => streamToDispPt(p, c));
+    } else {
+      STATE.roiDraftRRect = null;
+    }
+  } else {
+    STATE.roiDraftRRect = null;
+    STATE.roiDragCorner = -1;
+    STATE.roiLastMouse = null;
+    drawROIOverlay();
+  }
+}
+
+function drawROIOverlay() {
+  const c = UI.roiCanvas;
+  if (!c) return;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, c.width, c.height);
+
+  const drawCorners = (pts) => {
+    ctx.fillStyle = "rgba(255,0,255,0.10)";
+    ctx.strokeStyle = "#ff6ad5";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    pts.forEach((p) => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = "#ff6ad5";
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.stroke();
+    });
+  };
+
+  if (STATE.editingROI) {
+    if (STATE.roiDraftRRect && STATE.roiDraftRRect.length === 4) {
+      drawCorners(STATE.roiDraftRRect);
+    } else if (STATE.roiDraftRRect && STATE.roiDraftRRect.length === 2) {
+      const [a, b] = STATE.roiDraftRRect;
+      const rectPts = [
+        { x: a.x, y: a.y },
+        { x: b.x, y: a.y },
+        { x: b.x, y: b.y },
+        { x: a.x, y: b.y },
+      ];
+      drawCorners(rectPts);
+    }
+    return;
+  }
+
+  if (STATE.bedROI && STATE.bedROI.type === "rrect" && STATE.bedROI.pts.length === 4) {
+    const dispPts = STATE.bedROI.pts.map((p) => streamToDispPt(p, c));
+    drawCorners(dispPts);
+  }
+}
+
+function centroid(pts) {
+  const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+  const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+  return { x: cx, y: cy };
+}
+
+function rotateAll(pts, angleRad) {
+  const c = centroid(pts);
+  const cos = Math.cos(angleRad), sin = Math.sin(angleRad);
+  return pts.map((p) => {
+    const dx = p.x - c.x, dy = p.y - c.y;
+    return { x: c.x + dx * cos - dy * sin, y: c.y + dx * sin + dy * cos };
+  });
+}
+
+function updateROIStatus() {
+  if (UI.roiStatusText) {
+    if (STATE.bedROI && STATE.bedROI.pts && STATE.bedROI.pts.length === 4) {
+      UI.roiStatusText.textContent = "ROI aktif";
+    } else {
+      UI.roiStatusText.textContent = "Tidak ada ROI";
+    }
+  }
+}
+
+function attachRoiEvents() {
+  const canvas = UI.roiCanvas;
+  if (!canvas) return;
+  
+  let makingRect = false;
+
+  const toLocal = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+
+  canvas.addEventListener("mousedown", (e) => {
+    if (!STATE.editingROI) return;
+    const p = toLocal(e);
+
+    if (!STATE.roiDraftRRect) {
+      makingRect = true;
+      STATE.roiDraftRRect = [p, p];
+      drawROIOverlay();
+      return;
+    }
+
+    if (STATE.roiDraftRRect.length === 2) {
+      makingRect = true;
+      return;
+    }
+
+    const pts = STATE.roiDraftRRect;
+    let hit = -1;
+    for (let i = 0; i < pts.length; i++) {
+      const d = Math.hypot(pts[i].x - p.x, pts[i].y - p.y);
+      if (d <= 10) {
+        hit = i;
+        break;
+      }
+    }
+    if (hit >= 0) {
+      STATE.roiDragCorner = hit;
+      STATE.roiLastMouse = p;
+    } else {
+      STATE.roiDragCorner = -1;
+      STATE.roiLastMouse = p;
+    }
+  });
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (!STATE.editingROI) return;
+    const p = toLocal(e);
+
+    if (STATE.roiDraftRRect && STATE.roiDraftRRect.length === 2 && makingRect) {
+      STATE.roiDraftRRect[1] = p;
+      drawROIOverlay();
+      return;
+    }
+
+    if (STATE.roiDraftRRect && STATE.roiDraftRRect.length === 4) {
+      if (STATE.roiDragCorner >= 0) {
+        const prev = STATE.roiLastMouse || p;
+        const dx = p.x - prev.x, dy = p.y - prev.y;
+        const pts = STATE.roiDraftRRect.slice();
+        pts[STATE.roiDragCorner] = {
+          x: pts[STATE.roiDragCorner].x + dx,
+          y: pts[STATE.roiDragCorner].y + dy,
+        };
+        STATE.roiDraftRRect = pts;
+        STATE.roiLastMouse = p;
+        drawROIOverlay();
+      } else if (STATE.roiLastMouse && e.shiftKey) {
+        const prev = STATE.roiLastMouse;
+        const c = centroid(STATE.roiDraftRRect);
+        const a1 = Math.atan2(prev.y - c.y, prev.x - c.x);
+        const a2 = Math.atan2(p.y - c.y, p.x - c.x);
+        const da = a2 - a1;
+        STATE.roiDraftRRect = rotateAll(STATE.roiDraftRRect, da);
+        STATE.roiLastMouse = p;
+        drawROIOverlay();
+      }
+    }
+  });
+
+  window.addEventListener("mouseup", () => {
+    makingRect = false;
+    if (STATE.roiDraftRRect && STATE.roiDraftRRect.length === 2) {
+      const [a, b] = STATE.roiDraftRRect;
+      const rectPts = [
+        { x: a.x, y: a.y },
+        { x: b.x, y: a.y },
+        { x: b.x, y: b.y },
+        { x: a.x, y: b.y },
+      ];
+      STATE.roiDraftRRect = rectPts;
+      drawROIOverlay();
+    }
+    STATE.roiDragCorner = -1;
+    STATE.roiLastMouse = null;
+  });
+
+  canvas.addEventListener("contextmenu", (e) => {
+    if (STATE.editingROI) {
+      e.preventDefault();
+      STATE.roiDragCorner = -1;
+      return false;
+    }
+  });
+
+  if (UI.roiEdit) {
+    UI.roiEdit.addEventListener("click", () => setEditorUI(true));
+  }
+  if (UI.roiCancel) {
+    UI.roiCancel.addEventListener("click", () => setEditorUI(false));
+  }
+  if (UI.roiSave) {
+    UI.roiSave.addEventListener("click", () => {
+      if (!STATE.roiDraftRRect || STATE.roiDraftRRect.length !== 4) {
+        alert("Buat rectangle dulu (drag) hingga muncul 4 titik sudut.");
+        return;
+      }
+      const canvas = UI.roiCanvas;
+      const ptsStream = STATE.roiDraftRRect.map((p) => dispToStreamPt(p, canvas));
+      STATE.bedROI = { type: "rrect", pts: ptsStream };
+      saveROI(STATE.bedROI);
+      setEditorUI(false);
+      drawROIOverlay();
+      updateROIStatus();
+      alert("ROI (rotated rectangle) disimpan.");
+    });
+  }
+  if (UI.roiDelete) {
+    UI.roiDelete.addEventListener("click", deleteROI);
+  }
 }
 
 // ========== POSE INDICES ==========
@@ -326,6 +652,11 @@ function updateFeatureToggles() {
   UI.fallInfoPanel.classList.toggle("hidden", !STATE.fallDetectionActive);
   UI.rehabInfoPanel.classList.toggle("hidden", !STATE.rehabActive);
   UI.anglesPanel.classList.toggle("hidden", !STATE.fallDetectionActive && !STATE.rehabActive);
+  
+  // Show/hide ROI panel when fall detection is active
+  if (UI.roiPanel) {
+    UI.roiPanel.classList.toggle("hidden", !STATE.fallDetectionActive);
+  }
 }
 
 function updateFPS() {
@@ -457,8 +788,13 @@ function updateFallDetection(t, lmStream) {
   conf += sudden ? 0.25 : 0;
   conf += inactive ? 0.15 : 0;
 
-  let safe = conf < CONFIG.fall.confThreshold;
-  if (!safe) {
+  // Bed ROI gating (sleeping detection)
+  const ref = torso_mid || hips_mid;
+  const sleeping = !!(horizontal && ref && pointInROI(ref));
+  if (sleeping) conf = 0.0;
+
+  let safe = conf < CONFIG.fall.confThreshold || sleeping;
+  if (!safe && !sleeping) {
     if (!STATE.fall.inFallWindow) {
       STATE.fall.inFallWindow = true;
       STATE.fall.lastFallTriggerT = t;
@@ -494,6 +830,7 @@ function updateFallDetection(t, lmStream) {
     angles,
     fall_confidence: conf,
     safe,
+    sleeping,
     timer,
     help_active: STATE.fall.helpActive,
     waving: STATE.fall.wavingNow,
@@ -664,17 +1001,31 @@ function drawSkeleton(ctx, lm, W, H) {
 function updateFallUI(res) {
   let status = "SAFE";
   if (res.help_active) status = "HELP";
-  else if (!res.safe) status = "EMERGENCY";
+  else if (!res.safe && !res.sleeping) status = "EMERGENCY";
+  else if (res.sleeping) status = "SAFE (Sleeping)";
 
   UI.fallStatus.textContent = status;
-  UI.fallStatus.classList.remove("safe", "alert", "help");
+  UI.fallStatus.classList.remove("safe", "alert", "help", "sleeping");
   if (status === "SAFE") UI.fallStatus.classList.add("safe");
   else if (status === "HELP") UI.fallStatus.classList.add("help");
+  else if (status === "SAFE (Sleeping)") UI.fallStatus.classList.add("sleeping");
   else UI.fallStatus.classList.add("alert");
 
   UI.fallConfidence.textContent = `${Math.round(res.fall_confidence * 100)}%`;
   UI.helpGesture.textContent = res.waving ? "WAVING" : "OFF";
+  if (UI.sleepingStatus) UI.sleepingStatus.textContent = res.sleeping ? "YES" : "OFF";
   UI.fallTimer.textContent = `${Math.round(res.timer)}s`;
+
+  // Update header status badge
+  if (UI.statusBadge) {
+    UI.statusBadge.textContent = status;
+    UI.statusBadge.classList.remove("safe", "alert");
+    if (status.startsWith("SAFE")) {
+      UI.statusBadge.classList.add("safe");
+    } else {
+      UI.statusBadge.classList.add("alert");
+    }
+  }
 
   // Toast and Telegram
   if (status !== STATE.fall.lastStatus) {
@@ -731,6 +1082,7 @@ async function startCamera() {
     UI.cameraPlaceholder.style.display = "none";
     UI.video.style.display = "block";
     UI.overlay.style.display = "block";
+    if (UI.roiCanvas) UI.roiCanvas.style.display = "block";
     
     syncCanvasSize();
     
@@ -764,6 +1116,7 @@ function stopCamera() {
   UI.video.srcObject = null;
   UI.video.style.display = "none";
   UI.overlay.style.display = "none";
+  if (UI.roiCanvas) UI.roiCanvas.style.display = "none";
   UI.cameraPlaceholder.style.display = "flex";
   
   STATE.cameraActive = false;
@@ -773,12 +1126,25 @@ function stopCamera() {
   // Clear canvas
   const ctx = UI.overlay.getContext("2d");
   ctx.clearRect(0, 0, UI.overlay.width, UI.overlay.height);
+  
+  // Clear ROI canvas
+  if (UI.roiCanvas) {
+    const roiCtx = UI.roiCanvas.getContext("2d");
+    roiCtx.clearRect(0, 0, UI.roiCanvas.width, UI.roiCanvas.height);
+  }
 }
 
 function syncCanvasSize() {
   const rect = UI.video.getBoundingClientRect();
   UI.overlay.width = rect.width;
   UI.overlay.height = rect.height;
+  
+  // Sync ROI canvas size
+  if (UI.roiCanvas) {
+    UI.roiCanvas.width = rect.width;
+    UI.roiCanvas.height = rect.height;
+    drawROIOverlay();
+  }
 }
 
 // ========== MODEL LOADING ==========
@@ -936,6 +1302,13 @@ document.body.addEventListener("click", () => {
 
 // ========== INITIALIZATION ==========
 function init() {
+  // Load saved ROI from localStorage
+  STATE.bedROI = loadROI();
+  updateROIStatus();
+  
+  // Attach ROI events
+  attachRoiEvents();
+  
   setStatusText("Kamera belum aktif");
   updateFeatureToggles();
 }

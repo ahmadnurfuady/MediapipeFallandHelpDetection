@@ -2,88 +2,11 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <title>Rehab Medic – Bicep Curl Counter</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="styles.css" />
-  <!-- Tasks Vision hanya di-load dalam JS (ES module import) -->
+  <title>Redirecting...</title>
+  <meta http-equiv="refresh" content="0; url=index.html" />
+  <script>window.location.href = "index.html";</script>
 </head>
 <body>
-  <header>
-    <h1>Rehab Medic – Bicep Curl Counter</h1>
-    <div class="right">
-      <a href="index.html" style="color:var(--blue); font-weight:600; text-decoration:none;">Dashboard</a>
-    </div>
-  </header>
-  <main>
-    <div class="video-section">
-      <div class="video-wrap">
-        <video id="rehab-video" playsinline></video>
-        <canvas id="rehab-overlay"></canvas>
-      </div>
-      <div class="legend" id="rehab-status">Status: Inisialisasi...</div>
-    </div>
-
-    <div class="grid two" style="margin-top:18px;">
-      <div class="panel">
-        <h2>Pengaturan</h2>
-        <div style="display:grid; gap:10px;">
-          <div>
-            <label>Up Threshold (deg)</label>
-            <input type="number" id="up-th" value="30" min="0" max="180" step="1" />
-          </div>
-          <div>
-            <label>Down Threshold (deg)</label>
-            <input type="number" id="down-th" value="160" min="0" max="180" step="1" />
-          </div>
-          <div>
-            <label>Min Detection Confidence</label>
-            <input type="range" id="det-conf" value="0.5" min="0" max="1" step="0.05" />
-          </div>
-          <div>
-            <label>Min Tracking Confidence</label>
-            <input type="range" id="track-conf" value="0.5" min="0" max="1" step="0.05" />
-          </div>
-          <div>
-            <label>Angle Smoothing (EMA α)</label>
-            <input type="range" id="angle-alpha" value="0.35" min="0.05" max="0.9" step="0.05" />
-          </div>
-          <div>
-            <label>Model</label>
-            <select id="model-sel">
-              <option value="lite" selected>Lite (Cepat)</option>
-              <option value="full">Full (Lebih Akurat)</option>
-            </select>
-          </div>
-        </div>
-        <div class="roi-toolbar" style="margin-top:14px;">
-          <button id="apply-btn" class="primary">Apply</button>
-          <button id="pause-btn">Pause</button>
-          <button id="reset-btn" class="danger">Reset</button>
-          <button id="mirror-btn">Mirror Off</button>
-          <button id="model-btn">Reload Model</button>
-          <button id="debug-btn">Debug On</button>
-        </div>
-        <div class="metrics simple">
-          <div><strong>Shortcut:</strong> Space = Pause | R = Reset | M = Mirror | D = Debug | L = Toggle Model</div>
-          <div>Rule: angle > down => stage=down; angle < up & stage=down => reps++ / stage=up</div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2>Statistik</h2>
-        <ul id="rehab-metrics">
-          <li>KIRI - Reps <span id="reps-left">0</span></li>
-          <li>KIRI - Stage <span id="stage-left">-</span></li>
-          <li>KIRI - Angle <span id="angle-left">-</span></li>
-          <li>KANAN - Reps <span id="reps-right">0</span></li>
-          <li>KANAN - Stage <span id="stage-right">-</span></li>
-          <li>KANAN - Angle <span id="angle-right">-</span></li>
-          <li>FPS <span id="fps-txt">-</span></li>
-          <li>Model <span id="model-txt">lite</span></li>
-        </ul>
-      </div>
-    </div>
-  </main>
-  <script type="module" src="rehab_medic.js"></script>
+  <p>Redirecting to <a href="index.html">Integrated Detection System</a>...</p>
 </body>
 </html>

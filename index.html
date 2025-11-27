@@ -2,32 +2,768 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <title>Mediapipe Project Dashboard</title>
+  <title>Integrated Fall Detection & Rehab Medic</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Integrated page for Fall Detection, Sleeping Detection with ROI, and Rehab Medic (Bicep Curl) with improved controls." />
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* Integrated page specific styles */
+    .integrated-container {
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      gap: 16px;
+      padding: 16px;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+    
+    @media (max-width: 1100px) {
+      .integrated-container {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    .camera-section {
+      background: var(--panel);
+      border: 1px solid #1b2540;
+      border-radius: 12px;
+      padding: 12px;
+      min-height: 400px;
+    }
+    
+    .camera-container {
+      position: relative;
+      width: 100%;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    .camera-container video {
+      width: 100%;
+      display: block;
+      border-radius: 8px;
+      background: #000;
+    }
+    
+    .camera-container canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    
+    .camera-container #roi-canvas {
+      pointer-events: none;
+      z-index: 5;
+    }
+    
+    .camera-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 360px;
+      color: var(--muted);
+      font-size: 16px;
+      gap: 12px;
+    }
+    
+    .camera-placeholder svg {
+      width: 64px;
+      height: 64px;
+      opacity: 0.5;
+    }
+    
+    .controls-section {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    
+    /* Toggle switch styles */
+    .toggle-panel {
+      background: var(--panel);
+      border: 1px solid #1b2540;
+      border-radius: 12px;
+      padding: 16px;
+    }
+    
+    .toggle-panel h3 {
+      margin: 0 0 16px 0;
+      font-size: 16px;
+      color: var(--text);
+      font-weight: 600;
+    }
+    
+    .toggle-group {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    
+    .toggle-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 10px;
+    }
+    
+    .toggle-item.disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    
+    .toggle-label {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    
+    .toggle-label span {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    
+    .toggle-label small {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    
+    .toggle-switch {
+      position: relative;
+      width: 52px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+    
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #2b3b6b;
+      transition: 0.3s;
+      border-radius: 28px;
+    }
+    
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 22px;
+      width: 22px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+    
+    .toggle-switch input:checked + .toggle-slider {
+      background-color: var(--green);
+    }
+    
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(24px);
+    }
+    
+    .toggle-switch.blue input:checked + .toggle-slider {
+      background-color: var(--blue);
+    }
+    
+    .toggle-switch.orange input:checked + .toggle-slider {
+      background-color: var(--orange);
+    }
+    
+    .toggle-switch.magenta input:checked + .toggle-slider {
+      background-color: var(--magenta);
+    }
+    
+    /* Info panels */
+    .info-panel {
+      background: var(--panel);
+      border: 1px solid #1b2540;
+      border-radius: 12px;
+      padding: 16px;
+    }
+    
+    .info-panel h3 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    
+    .info-panel.hidden {
+      display: none;
+    }
+    
+    /* Fall Detection Info */
+    .fall-info-grid {
+      display: grid;
+      gap: 8px;
+    }
+    
+    .fall-info-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    
+    .fall-info-item span:first-child {
+      color: var(--muted);
+    }
+    
+    .fall-info-item span:last-child {
+      font-weight: 700;
+      color: var(--text);
+    }
+    
+    .fall-status-badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    
+    .fall-status-badge.safe {
+      background: rgba(53, 208, 127, 0.15);
+      color: var(--green);
+      border: 1px solid rgba(53, 208, 127, 0.4);
+    }
+    
+    .fall-status-badge.alert {
+      background: rgba(255, 71, 87, 0.15);
+      color: var(--red);
+      border: 1px solid rgba(255, 71, 87, 0.5);
+    }
+    
+    .fall-status-badge.help {
+      background: rgba(245, 165, 36, 0.15);
+      color: var(--orange);
+      border: 1px solid rgba(245, 165, 36, 0.5);
+    }
+    
+    .fall-status-badge.sleeping {
+      background: rgba(255, 106, 213, 0.15);
+      color: var(--magenta);
+      border: 1px solid rgba(255, 106, 213, 0.5);
+    }
+    
+    /* ROI Panel */
+    .roi-panel {
+      background: var(--panel);
+      border: 1px solid #1b2540;
+      border-radius: 12px;
+      padding: 16px;
+    }
+    
+    .roi-panel.hidden {
+      display: none;
+    }
+    
+    .roi-panel h3 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    
+    .roi-toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    
+    .roi-toolbar button {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid #2b3b6b;
+      background: #15244a;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    
+    .roi-toolbar button:hover {
+      background: #1c2f5a;
+    }
+    
+    .roi-toolbar button.primary {
+      background: var(--magenta);
+      border-color: var(--magenta);
+    }
+    
+    .roi-toolbar button.primary:hover {
+      filter: brightness(1.1);
+    }
+    
+    .roi-toolbar button.danger {
+      background: var(--red);
+      border-color: var(--red);
+    }
+    
+    .roi-toolbar button.danger:hover {
+      filter: brightness(0.9);
+    }
+    
+    .roi-toolbar button.hidden {
+      display: none;
+    }
+    
+    .roi-hint {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    
+    .roi-status {
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    
+    .roi-status strong {
+      color: var(--magenta);
+    }
+    
+    /* Rehab Medic Info */
+    .rehab-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    
+    .rehab-stat-card {
+      padding: 14px;
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 10px;
+      text-align: center;
+    }
+    
+    .rehab-stat-card.left {
+      border-left: 3px solid var(--orange);
+    }
+    
+    .rehab-stat-card.right {
+      border-left: 3px solid var(--blue);
+    }
+    
+    .rehab-stat-card h4 {
+      margin: 0 0 8px 0;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    
+    .rehab-stat-card .reps {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1;
+    }
+    
+    .rehab-stat-card .details {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    
+    .rehab-stat-card .details strong {
+      color: var(--text);
+    }
+    
+    .rehab-extra-info {
+      margin-top: 12px;
+      padding: 10px;
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    .rehab-extra-info strong {
+      color: var(--text);
+    }
+    
+    /* Angles panel */
+    .angles-panel {
+      background: var(--panel);
+      border: 1px solid #1b2540;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+    
+    .angles-panel.hidden {
+      display: none;
+    }
+    
+    .angles-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    
+    .angle-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 10px;
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    
+    .angle-item span:first-child {
+      color: var(--muted);
+    }
+    
+    .angle-item span:last-child {
+      color: #ffd166;
+      font-weight: 700;
+    }
+    
+    /* Loading state */
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      z-index: 10;
+    }
+    
+    .loading-overlay.hidden {
+      display: none;
+    }
+    
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 255, 255, 0.2);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .status-text {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 8px;
+      text-align: center;
+    }
+    
+    /* Toast notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--red);
+      color: white;
+      font-weight: 800;
+      padding: 12px 16px;
+      border-radius: 10px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.25s ease;
+      z-index: 1000;
+    }
+    
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .toast.hidden {
+      display: none;
+    }
+    
+    /* Rehab controls */
+    .rehab-controls {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    
+    .rehab-controls button {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid #2b3b6b;
+      background: #15244a;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    
+    .rehab-controls button:hover {
+      background: #1c2f5a;
+    }
+    
+    .rehab-controls button.danger {
+      background: #ff4757;
+      border-color: #ff4757;
+    }
+    
+    .rehab-controls button.danger:hover {
+      background: #e03e4d;
+    }
+    
+    /* Responsive */
+    @media (max-width: 600px) {
+      .integrated-container {
+        padding: 10px;
+        gap: 12px;
+      }
+      
+      .rehab-stats {
+        grid-template-columns: 1fr;
+      }
+      
+      .angles-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
-  <div class="wrap" style="padding:40px 18px;">
-    <h1 style="text-align:center; margin-bottom:8px;">Mediapipe Project Dashboard</h1>
-    <p class="subtitle">Pilih fitur yang ingin dijalankan.</p>
-    <div class="grid">
-      <div class="card">
-        <h2>Integrated System</h2>
-        <p>Fall Detection & Rehab Medic terintegrasi dengan kontrol switch yang lebih baik.</p>
-        <a href="integrated.html" style="background: linear-gradient(135deg, #ff6ad5, #c850c0);">Buka Integrated</a>
+  <header>
+    <h1>Integrated Detection System</h1>
+    <div class="right">
+      <div id="status-badge" class="status safe">SAFE</div>
+    </div>
+  </header>
+
+  <div class="integrated-container">
+    <!-- Camera Section (Left) -->
+    <div class="camera-section">
+      <div class="camera-container" id="camera-container">
+        <!-- Placeholder shown when camera is off -->
+        <div class="camera-placeholder" id="camera-placeholder">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          <span>Kamera tidak aktif</span>
+          <small>Aktifkan switch kamera untuk memulai</small>
+        </div>
+        
+        <!-- Video and Canvas (hidden until camera is on) -->
+        <video id="video" playsinline autoplay muted style="display:none;"></video>
+        <canvas id="overlay" style="display:none;"></canvas>
+        <canvas id="roi-canvas" style="display:none;"></canvas>
+        
+        <!-- Loading overlay -->
+        <div class="loading-overlay hidden" id="loading-overlay">
+          <div class="loading-spinner"></div>
+        </div>
       </div>
-      <div class="card">
-        <h2>Fall Detection</h2>
-        <p>Deteksi jatuh real-time dan gesture bantuan.</p>
-        <a href="fall.html">Buka Fall Detection</a>
+      <div class="status-text" id="status-text">Kamera belum aktif</div>
+    </div>
+
+    <!-- Controls Section (Right) -->
+    <div class="controls-section">
+      <!-- Toggle Switches -->
+      <div class="toggle-panel">
+        <h3>Kontrol Fitur</h3>
+        <div class="toggle-group">
+          <!-- Camera Toggle -->
+          <div class="toggle-item">
+            <div class="toggle-label">
+              <span>Kamera</span>
+              <small>Aktifkan kamera untuk deteksi</small>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-camera" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          
+          <!-- Fall Detection Toggle -->
+          <div class="toggle-item disabled" id="fall-toggle-item">
+            <div class="toggle-label">
+              <span>Fall Detection</span>
+              <small>Deteksi jatuh & gesture bantuan</small>
+            </div>
+            <label class="toggle-switch blue">
+              <input type="checkbox" id="toggle-fall" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          
+          <!-- Rehab Medic Toggle -->
+          <div class="toggle-item disabled" id="rehab-toggle-item">
+            <div class="toggle-label">
+              <span>Rehab Medic</span>
+              <small>Counter bicep curl</small>
+            </div>
+            <label class="toggle-switch orange">
+              <input type="checkbox" id="toggle-rehab" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
       </div>
-      <div class="card">
-        <h2>Rehab Medic (Bicep Curl)</h2>
-        <p>Hitung repetisi curl kiri & kanan dengan sudut siku dan smoothing.</p>
-        <a class="alt" href="rehab.html">Mulai Rehab Medic</a>
+
+      <!-- ROI Panel for Sleeping Detection -->
+      <div class="roi-panel hidden" id="roi-panel">
+        <h3>Sleeping ROI (Area Kasur)</h3>
+        <div class="roi-toolbar">
+          <button id="roi-edit" type="button">Edit ROI</button>
+          <button id="roi-save" type="button" class="primary hidden">Save ROI</button>
+          <button id="roi-cancel" type="button" class="hidden">Cancel</button>
+          <button id="roi-delete" type="button" class="danger">Delete ROI</button>
+        </div>
+        <p class="roi-hint">Klik-drag di video untuk menggambar area kasur. Drag sudut untuk resize, Shift+drag untuk rotate. ROI ini digunakan untuk deteksi sleeping.</p>
+        <div class="roi-status" id="roi-status">
+          Status: <strong id="roi-status-text">Tidak ada ROI</strong>
+        </div>
+      </div>
+
+      <!-- Fall Detection Info Panel -->
+      <div class="info-panel hidden" id="fall-info-panel">
+        <h3>Fall Detection Status</h3>
+        <div class="fall-info-grid">
+          <div class="fall-info-item">
+            <span>Status</span>
+            <span class="fall-status-badge safe" id="fall-status">SAFE</span>
+          </div>
+          <div class="fall-info-item">
+            <span>Fall Confidence</span>
+            <span id="fall-confidence">0%</span>
+          </div>
+          <div class="fall-info-item">
+            <span>Help Gesture</span>
+            <span id="help-gesture">OFF</span>
+          </div>
+          <div class="fall-info-item">
+            <span>Sleeping</span>
+            <span id="sleeping-status">OFF</span>
+          </div>
+          <div class="fall-info-item">
+            <span>Timer</span>
+            <span id="fall-timer">0s</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rehab Medic Info Panel -->
+      <div class="info-panel hidden" id="rehab-info-panel">
+        <h3>Bicep Curl Counter</h3>
+        <div class="rehab-stats">
+          <div class="rehab-stat-card left">
+            <h4>Tangan Kiri</h4>
+            <div class="reps" id="reps-left">0</div>
+            <div class="details">
+              <span>Stage: <strong id="stage-left">-</strong></span>
+              <span>Angle: <strong id="angle-left">-</strong>°</span>
+            </div>
+          </div>
+          <div class="rehab-stat-card right">
+            <h4>Tangan Kanan</h4>
+            <div class="reps" id="reps-right">0</div>
+            <div class="details">
+              <span>Stage: <strong id="stage-right">-</strong></span>
+              <span>Angle: <strong id="angle-right">-</strong>°</span>
+            </div>
+          </div>
+        </div>
+        <div class="rehab-extra-info">
+          <span>FPS: <strong id="fps-display">-</strong></span>
+          <span>Pose: <strong id="pose-status">-</strong></span>
+        </div>
+        <div class="rehab-controls">
+          <button id="reset-counter" class="danger">Reset Counter</button>
+        </div>
+      </div>
+
+      <!-- Joint Angles Panel (shown when any detection is active) -->
+      <div class="angles-panel hidden" id="angles-panel">
+        <h3>Joint Angles</h3>
+        <div class="angles-grid" id="angles-grid">
+          <div class="angle-item"><span>L. Elbow</span><span id="ang-left-elbow">0°</span></div>
+          <div class="angle-item"><span>R. Elbow</span><span id="ang-right-elbow">0°</span></div>
+          <div class="angle-item"><span>L. Shoulder</span><span id="ang-left-shoulder">0°</span></div>
+          <div class="angle-item"><span>R. Shoulder</span><span id="ang-right-shoulder">0°</span></div>
+          <div class="angle-item"><span>L. Hip</span><span id="ang-left-hip">0°</span></div>
+          <div class="angle-item"><span>R. Hip</span><span id="ang-right-hip">0°</span></div>
+          <div class="angle-item"><span>L. Knee</span><span id="ang-left-knee">0°</span></div>
+          <div class="angle-item"><span>R. Knee</span><span id="ang-right-knee">0°</span></div>
+        </div>
       </div>
     </div>
-    <footer>© 2025 Integrasi Mediapipe</footer>
   </div>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast hidden">ALERT!</div>
+  
+  <!-- Audio for alerts -->
+  <audio id="alert-sound">
+    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAaW5mbyAAAAA=" type="audio/wav" />
+  </audio>
+
+  <!-- Config globals -->
+  <script>
+    window.BACKEND_BASE = '';
+    window.TUYA_DEVICE_ID = 'a330d051018bae1bedcfmc';
+    window.WEB_API_KEY = 'super-secret-key';
+  </script>
+
+  <!-- Include client bridge -->
+  <script type="module" src="./client/alarm_bridge.js"></script>
+
+  <!-- Main integrated app script -->
+  <script type="module" src="./integrated.js"></script>
 </body>
 </html>
