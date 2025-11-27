@@ -102,11 +102,17 @@ const EXERCISES = {
     labelLeft: "Tangan Kiri",
     labelRight: "Tangan Kanan",
     // Angle thresholds for bicep curls (elbow angle: shoulder-elbow-wrist)
-    upThreshold: 30,      // Arm curled up position
-    downThreshold: 160,   // Arm extended down position
-    // Ideal angles for form accuracy
-    idealUpAngle: 30,     // Ideal angle at top of curl
-    idealDownAngle: 170,  // Ideal angle at bottom of curl
+    // Thresholds are slightly different from ideal to allow for transition detection
+    upThreshold: 30,      // Arm curled up position (triggers rep count)
+    downThreshold: 160,   // Arm extended down position (triggers "down" stage)
+    // Ideal angles for form accuracy calculation (target angles for perfect form)
+    idealUpAngle: 30,     // Ideal angle at top of curl (full contraction)
+    idealDownAngle: 160,  // Ideal angle at bottom of curl (matches threshold for consistency)
+    // Counter logic: "down" when angle > downThreshold, "up" transition when angle < upThreshold
+    // downCompare: ">" means stage becomes "down" when angle > downThreshold
+    // upCompare: "<" means stage becomes "up" (and rep counted) when angle < upThreshold
+    downCompare: ">",
+    upCompare: "<",
     // Joints to track
     joints: {
       left: { a: "LEFT_SHOULDER", b: "LEFT_ELBOW", c: "LEFT_WRIST" },
@@ -126,6 +132,9 @@ const EXERCISES = {
     // Ideal angles for form accuracy
     idealUpAngle: 170,    // Ideal standing angle
     idealDownAngle: 90,   // Ideal squat depth angle
+    // Counter logic: "down" when angle < downThreshold, "up" transition when angle > upThreshold
+    downCompare: "<",
+    upCompare: ">",
     // Joints to track
     joints: {
       left: { a: "LEFT_HIP", b: "LEFT_KNEE", c: "LEFT_ANKLE" },
@@ -145,6 +154,9 @@ const EXERCISES = {
     // Ideal angles for form accuracy
     idealUpAngle: 90,     // Ideal raised position (parallel to ground)
     idealDownAngle: 10,   // Ideal lowered position
+    // Counter logic: "down" when angle < downThreshold, "up" transition when angle > upThreshold
+    downCompare: "<",
+    upCompare: ">",
     // Joints to track
     joints: {
       left: { a: "LEFT_HIP", b: "LEFT_SHOULDER", c: "LEFT_ELBOW" },
@@ -275,10 +287,8 @@ const STATE = {
     rawAngleRight: null,
     smoothAngleLeft: null,
     smoothAngleRight: null,
-    // Form accuracy tracking
+    // Form accuracy tracking (sliding window of last 100 samples)
     errorHistory: [],         // Array of errors for mean calculation
-    totalErrorSum: 0,
-    totalErrorCount: 0,
     currentFormAccuracy: null,
     currentMeanError: null,
   },
@@ -945,27 +955,11 @@ function getJointPoints(lmRaw, jointConfig) {
 function calculateFormError(currentAngle, stage, exercise) {
   if (currentAngle == null || stage == null) return null;
   
-  let idealAngle;
-  if (stage === "down") {
-    // For bicep curls and lateral raises: "down" means arm is extended/lowered
-    // For squats: "down" means legs are bent (squat position)
-    if (exercise.name === "Squats") {
-      idealAngle = exercise.idealDownAngle; // ~90° for squat
-    } else {
-      idealAngle = exercise.idealDownAngle;
-    }
-  } else if (stage === "up") {
-    // For bicep curls: "up" means arm is curled
-    // For lateral raises: "up" means arms raised
-    // For squats: "up" means standing
-    if (exercise.name === "Squats") {
-      idealAngle = exercise.idealUpAngle; // ~170° for standing
-    } else {
-      idealAngle = exercise.idealUpAngle;
-    }
-  } else {
-    return null;
-  }
+  // Get the ideal angle based on stage - each exercise has its own ideal values defined in config
+  const idealAngle = stage === "down" ? exercise.idealDownAngle : 
+                     stage === "up" ? exercise.idealUpAngle : null;
+  
+  if (idealAngle == null) return null;
   
   return Math.abs(currentAngle - idealAngle);
 }
@@ -980,26 +974,71 @@ function updateFormAccuracy(errorLeft, errorRight, exercise) {
   
   const avgError = errors.reduce((a, b) => a + b, 0) / errors.length;
   
-  // Add to history
+  // Add to history (sliding window of last 100 samples)
   STATE.rehab.errorHistory.push(avgError);
-  STATE.rehab.totalErrorSum += avgError;
-  STATE.rehab.totalErrorCount++;
   
   // Keep only last 100 samples for real-time mean
   if (STATE.rehab.errorHistory.length > 100) {
-    const removed = STATE.rehab.errorHistory.shift();
-    STATE.rehab.totalErrorSum -= removed;
-    STATE.rehab.totalErrorCount--;
+    STATE.rehab.errorHistory.shift();
   }
   
-  // Calculate mean error
-  STATE.rehab.currentMeanError = STATE.rehab.totalErrorSum / STATE.rehab.totalErrorCount;
+  // Calculate mean error from all samples in history
+  const historySum = STATE.rehab.errorHistory.reduce((a, b) => a + b, 0);
+  STATE.rehab.currentMeanError = historySum / STATE.rehab.errorHistory.length;
   
   // Calculate accuracy percentage (inverse of error)
   // 0° error = 100%, maxAcceptableError = 0%
   const maxError = CONFIG.formAccuracy.maxAcceptableError;
   const accuracy = Math.max(0, Math.min(100, 100 - (STATE.rehab.currentMeanError / maxError) * 100));
   STATE.rehab.currentFormAccuracy = accuracy;
+}
+
+// Helper function to compare angle with threshold based on comparison operator
+function compareAngle(angle, threshold, operator) {
+  switch (operator) {
+    case ">": return angle > threshold;
+    case "<": return angle < threshold;
+    case ">=": return angle >= threshold;
+    case "<=": return angle <= threshold;
+    default: return angle > threshold; // Default to greater-than
+  }
+}
+
+// Process one side (left or right) of an exercise
+function processExerciseSide(lmRaw, exercise, side) {
+  const joints = getJointPoints(lmRaw, exercise.joints[side]);
+  
+  if (!joints.a || !joints.b || !joints.c) {
+    return { angle: null, error: null };
+  }
+  
+  const rawAngleKey = side === "left" ? "rawAngleLeft" : "rawAngleRight";
+  const smoothAngleKey = side === "left" ? "smoothAngleLeft" : "smoothAngleRight";
+  const stageKey = side === "left" ? "stageLeft" : "stageRight";
+  const repsKey = side === "left" ? "repsLeft" : "repsRight";
+  
+  // Calculate angle
+  STATE.rehab[rawAngleKey] = angleBetweenObj(joints.a, joints.b, joints.c);
+  STATE.rehab[smoothAngleKey] = ema(STATE.rehab[smoothAngleKey], STATE.rehab[rawAngleKey], CONFIG.rehab.angleAlpha);
+  
+  // Update stage based on configuration-driven comparison
+  const currentAngle = STATE.rehab[rawAngleKey];
+  
+  // Check if entering "down" stage
+  if (compareAngle(currentAngle, exercise.downThreshold, exercise.downCompare)) {
+    STATE.rehab[stageKey] = "down";
+  }
+  
+  // Check if transitioning to "up" stage (rep counted)
+  if (compareAngle(currentAngle, exercise.upThreshold, exercise.upCompare) && STATE.rehab[stageKey] === "down") {
+    STATE.rehab[stageKey] = "up";
+    STATE.rehab[repsKey]++;
+  }
+  
+  // Calculate form error
+  const error = calculateFormError(currentAngle, STATE.rehab[stageKey], exercise);
+  
+  return { angle: STATE.rehab[smoothAngleKey], error };
 }
 
 // Main rehab exercise update function
@@ -1023,91 +1062,15 @@ function updateRehabMedic(lmRaw) {
     };
   }
   
-  let errorLeft = null;
-  let errorRight = null;
-  
-  // Get left side joints and calculate angle
-  const leftJoints = getJointPoints(lmRaw, exercise.joints.left);
-  if (leftJoints.a && leftJoints.b && leftJoints.c) {
-    STATE.rehab.rawAngleLeft = angleBetweenObj(leftJoints.a, leftJoints.b, leftJoints.c);
-    STATE.rehab.smoothAngleLeft = ema(STATE.rehab.smoothAngleLeft, STATE.rehab.rawAngleLeft, CONFIG.rehab.angleAlpha);
-    
-    // Different counter logic based on exercise type
-    if (exerciseKey === "squats") {
-      // Squats: down when angle is small (bent), up when angle is large (straight)
-      if (STATE.rehab.rawAngleLeft < exercise.downThreshold) {
-        STATE.rehab.stageLeft = "down";
-      }
-      if (STATE.rehab.rawAngleLeft > exercise.upThreshold && STATE.rehab.stageLeft === "down") {
-        STATE.rehab.stageLeft = "up";
-        STATE.rehab.repsLeft++;
-      }
-    } else if (exerciseKey === "lateral_raises") {
-      // Lateral Raises: up when angle is large (raised), down when angle is small (lowered)
-      if (STATE.rehab.rawAngleLeft < exercise.downThreshold) {
-        STATE.rehab.stageLeft = "down";
-      }
-      if (STATE.rehab.rawAngleLeft > exercise.upThreshold && STATE.rehab.stageLeft === "down") {
-        STATE.rehab.stageLeft = "up";
-        STATE.rehab.repsLeft++;
-      }
-    } else {
-      // Bicep Curls: down when angle is large (extended), up when angle is small (curled)
-      if (STATE.rehab.rawAngleLeft > exercise.downThreshold) {
-        STATE.rehab.stageLeft = "down";
-      }
-      if (STATE.rehab.rawAngleLeft < exercise.upThreshold && STATE.rehab.stageLeft === "down") {
-        STATE.rehab.stageLeft = "up";
-        STATE.rehab.repsLeft++;
-      }
-    }
-    
-    errorLeft = calculateFormError(STATE.rehab.rawAngleLeft, STATE.rehab.stageLeft, exercise);
-  }
-  
-  // Get right side joints and calculate angle
-  const rightJoints = getJointPoints(lmRaw, exercise.joints.right);
-  if (rightJoints.a && rightJoints.b && rightJoints.c) {
-    STATE.rehab.rawAngleRight = angleBetweenObj(rightJoints.a, rightJoints.b, rightJoints.c);
-    STATE.rehab.smoothAngleRight = ema(STATE.rehab.smoothAngleRight, STATE.rehab.rawAngleRight, CONFIG.rehab.angleAlpha);
-    
-    // Different counter logic based on exercise type
-    if (exerciseKey === "squats") {
-      // Squats: down when angle is small (bent), up when angle is large (straight)
-      if (STATE.rehab.rawAngleRight < exercise.downThreshold) {
-        STATE.rehab.stageRight = "down";
-      }
-      if (STATE.rehab.rawAngleRight > exercise.upThreshold && STATE.rehab.stageRight === "down") {
-        STATE.rehab.stageRight = "up";
-        STATE.rehab.repsRight++;
-      }
-    } else if (exerciseKey === "lateral_raises") {
-      // Lateral Raises: up when angle is large (raised), down when angle is small (lowered)
-      if (STATE.rehab.rawAngleRight < exercise.downThreshold) {
-        STATE.rehab.stageRight = "down";
-      }
-      if (STATE.rehab.rawAngleRight > exercise.upThreshold && STATE.rehab.stageRight === "down") {
-        STATE.rehab.stageRight = "up";
-        STATE.rehab.repsRight++;
-      }
-    } else {
-      // Bicep Curls: down when angle is large (extended), up when angle is small (curled)
-      if (STATE.rehab.rawAngleRight > exercise.downThreshold) {
-        STATE.rehab.stageRight = "down";
-      }
-      if (STATE.rehab.rawAngleRight < exercise.upThreshold && STATE.rehab.stageRight === "down") {
-        STATE.rehab.stageRight = "up";
-        STATE.rehab.repsRight++;
-      }
-    }
-    
-    errorRight = calculateFormError(STATE.rehab.rawAngleRight, STATE.rehab.stageRight, exercise);
-  }
+  // Process both sides using the helper function
+  const leftResult = processExerciseSide(lmRaw, exercise, "left");
+  const rightResult = processExerciseSide(lmRaw, exercise, "right");
   
   // Update form accuracy
-  updateFormAccuracy(errorLeft, errorRight, exercise);
+  updateFormAccuracy(leftResult.error, rightResult.error, exercise);
   
-  // For squats, use combined counter (average of both legs or whichever detected more)
+  // For exercises that don't track both sides separately (e.g., squats),
+  // use combined counter (whichever detected more)
   if (!exercise.trackBothSides) {
     STATE.rehab.repsCombined = Math.max(STATE.rehab.repsLeft, STATE.rehab.repsRight);
     STATE.rehab.stageCombined = STATE.rehab.stageLeft || STATE.rehab.stageRight;
@@ -1144,8 +1107,6 @@ function resetRehabCounter() {
   STATE.rehab.smoothAngleRight = null;
   // Reset form accuracy
   STATE.rehab.errorHistory = [];
-  STATE.rehab.totalErrorSum = 0;
-  STATE.rehab.totalErrorCount = 0;
   STATE.rehab.currentFormAccuracy = null;
   STATE.rehab.currentMeanError = null;
   
