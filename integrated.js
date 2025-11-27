@@ -377,6 +377,13 @@ function nowS() {
   return Date.now() / 1000;
 }
 
+function formatDuration(startTimeMs, endTimeMs) {
+  const durationS = Math.round((endTimeMs - startTimeMs) / 1000);
+  const minutes = Math.floor(durationS / 60);
+  const seconds = durationS % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
 // ========== ROI UTILITY FUNCTIONS ==========
 function dispToStreamPt(p, canvas) {
   const sx = CONFIG.streamW / canvas.width;
@@ -1655,10 +1662,11 @@ function addExerciseToQueue() {
   if (!UI.addExerciseType || !UI.addExerciseReps) return;
   
   const type = UI.addExerciseType.value;
-  const reps = parseInt(UI.addExerciseReps.value, 10) || 10;
+  const repsValue = UI.addExerciseReps.value;
+  const reps = parseInt(repsValue, 10);
   
-  if (reps < 1 || reps > 100) {
-    alert("Jumlah repetisi harus antara 1-100");
+  if (isNaN(reps) || reps < 1 || reps > 100) {
+    showToast("Jumlah repetisi harus 1-100");
     return;
   }
   
@@ -1697,7 +1705,7 @@ function clearExerciseQueue() {
 
 function startRehabWorkout() {
   if (STATE.rehab.exerciseQueue.length === 0) {
-    alert("Tambahkan latihan terlebih dahulu");
+    showToast("Tambahkan latihan terlebih dahulu");
     return;
   }
   
@@ -1899,9 +1907,7 @@ function completeRehabWorkout() {
   
   // Populate stats
   if (UI.rehabCompleteStats) {
-    const duration = Math.round((STATE.rehab.endTime - STATE.rehab.startTime) / 1000);
-    const minutes = Math.floor(duration / 60);
-    const seconds = duration % 60;
+    const durationStr = formatDuration(STATE.rehab.startTime, STATE.rehab.endTime);
     
     let totalReps = 0;
     STATE.rehab.exerciseQueue.forEach(item => {
@@ -1924,7 +1930,7 @@ function completeRehabWorkout() {
       </div>
       <div class="stat-item">
         <span>Durasi</span>
-        <span>${minutes}:${seconds.toString().padStart(2, '0')}</span>
+        <span>${durationStr}</span>
       </div>
     `;
   }
