@@ -93,6 +93,7 @@ const CONFIG = {
     suddenSpeedThresh: 280.0,
     inactivityWindowS: 2.5,
     inactivitySpeedThresh: 18.0,
+    sleepingConfidence: 0.0, // Confidence when sleeping is detected (safe)
     help: {
       sustainS: 1.5,
       holdS: 6.0,
@@ -111,6 +112,13 @@ const CONFIG = {
     upThreshold: 30,
     downThreshold: 160,
     angleAlpha: 0.35,
+  },
+  
+  // ROI Config
+  roi: {
+    cornerRadius: 6,           // Corner circle radius in pixels
+    cornerHitDistance: 10,     // Distance threshold for corner hit detection
+    epsilon: 1e-9,             // Small value to prevent division by zero
   },
 };
 
@@ -301,7 +309,7 @@ function pointInQuad(ptStreamArr) {
     const xi = pts[i].x, yi = pts[i].y;
     const xj = pts[j].x, yj = pts[j].y;
     const intersect = yi > ptStreamArr[1] !== yj > ptStreamArr[1] &&
-      ptStreamArr[0] < ((xj - xi) * (ptStreamArr[1] - yi)) / (yj - yi || 1e-9) + xi;
+      ptStreamArr[0] < ((xj - xi) * (ptStreamArr[1] - yi)) / (yj - yi || CONFIG.roi.epsilon) + xi;
     if (intersect) inside = !inside;
   }
   return inside;
@@ -354,7 +362,7 @@ function drawROIOverlay() {
 
     pts.forEach((p) => {
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, CONFIG.roi.cornerRadius, 0, Math.PI * 2);
       ctx.fillStyle = "#ff6ad5";
       ctx.fill();
       ctx.strokeStyle = "#fff";
@@ -440,7 +448,7 @@ function attachRoiEvents() {
     let hit = -1;
     for (let i = 0; i < pts.length; i++) {
       const d = Math.hypot(pts[i].x - p.x, pts[i].y - p.y);
-      if (d <= 10) {
+      if (d <= CONFIG.roi.cornerHitDistance) {
         hit = i;
         break;
       }
@@ -791,7 +799,7 @@ function updateFallDetection(t, lmStream) {
   // Bed ROI gating (sleeping detection)
   const ref = torso_mid || hips_mid;
   const sleeping = !!(horizontal && ref && pointInROI(ref));
-  if (sleeping) conf = 0.0;
+  if (sleeping) conf = CONFIG.fall.sleepingConfidence;
 
   let safe = conf < CONFIG.fall.confThreshold || sleeping;
   if (!safe && !sleeping) {
