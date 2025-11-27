@@ -102,6 +102,15 @@ const CONFIG = {
   },
 };
 
+// ========== UTILITY FUNCTION (needed before STATE) ==========
+function emaFactory(alpha = 0.3) {
+  let v = null;
+  return (x) => {
+    v = v === null ? x : alpha * x + (1 - alpha) * v;
+    return v;
+  };
+}
+
 // ========== STATE MANAGEMENT ==========
 const STATE = {
   // System state
@@ -159,14 +168,6 @@ const STATE = {
 };
 
 // ========== UTILITY FUNCTIONS ==========
-function emaFactory(alpha = 0.3) {
-  let v = null;
-  return (x) => {
-    v = v === null ? x : alpha * x + (1 - alpha) * v;
-    return v;
-  };
-}
-
 function ema(prev, x, alpha) {
   if (prev == null) return x;
   return alpha * x + (1 - alpha) * prev;
