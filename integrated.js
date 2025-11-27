@@ -59,11 +59,38 @@ const UI = {
   poseStatus: document.getElementById("pose-status"),
   resetCounter: document.getElementById("reset-counter"),
   
+  // Standard Exercise Panel
+  standardExercisePanel: document.getElementById("standard-exercise-panel"),
+  
   // Form Accuracy Elements
   formAccuracyPanel: document.getElementById("form-accuracy-panel"),
   accuracyValue: document.getElementById("accuracy-value"),
   meanErrorValue: document.getElementById("mean-error-value"),
   accuracyBar: document.getElementById("accuracy-bar"),
+  
+  // Rehab Mode Elements
+  rehabModeSetup: document.getElementById("rehab-mode-setup"),
+  rehabModeActive: document.getElementById("rehab-mode-active"),
+  rehabModeComplete: document.getElementById("rehab-mode-complete"),
+  exerciseQueue: document.getElementById("exercise-queue"),
+  addExerciseType: document.getElementById("add-exercise-type"),
+  addExerciseReps: document.getElementById("add-exercise-reps"),
+  addExerciseBtn: document.getElementById("add-exercise-btn"),
+  startRehabBtn: document.getElementById("start-rehab-btn"),
+  clearQueueBtn: document.getElementById("clear-queue-btn"),
+  resetRehabBtn: document.getElementById("reset-rehab-btn"),
+  restartRehabBtn: document.getElementById("restart-rehab-btn"),
+  currentExerciseName: document.getElementById("current-exercise-name"),
+  rehabProgressLeft: document.getElementById("rehab-progress-left"),
+  rehabProgressRight: document.getElementById("rehab-progress-right"),
+  rehabTargetLeft: document.getElementById("rehab-target-left"),
+  rehabTargetRight: document.getElementById("rehab-target-right"),
+  progressQueue: document.getElementById("progress-queue"),
+  rehabTotalExercises: document.getElementById("rehab-total-exercises"),
+  rehabCompletedExercises: document.getElementById("rehab-completed-exercises"),
+  fpsDisplayRehab: document.getElementById("fps-display-rehab"),
+  poseStatusRehab: document.getElementById("pose-status-rehab"),
+  rehabCompleteStats: document.getElementById("rehab-complete-stats"),
   
   // Angles Panel
   anglesPanel: document.getElementById("angles-panel"),
@@ -291,6 +318,14 @@ const STATE = {
     errorHistory: [],         // Array of errors for mean calculation
     currentFormAccuracy: null,
     currentMeanError: null,
+    
+    // Rehab Mode state
+    rehabModeActive: false,      // Whether rehab mode workflow is active
+    rehabModePhase: "setup",     // "setup", "active", "complete"
+    exerciseQueue: [],           // Array of { type: string, reps: number, completedLeft: number, completedRight: number }
+    currentExerciseIndex: 0,     // Index of current exercise in queue
+    startTime: null,             // When the workout started
+    endTime: null,               // When the workout ended
   },
 };
 
@@ -340,6 +375,13 @@ function dist(a, b) {
 
 function nowS() {
   return Date.now() / 1000;
+}
+
+function formatDuration(startTimeMs, endTimeMs) {
+  const durationS = Math.round((endTimeMs - startTimeMs) / 1000);
+  const minutes = Math.floor(durationS / 60);
+  const seconds = durationS % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
 // ========== ROI UTILITY FUNCTIONS ==========
@@ -1131,6 +1173,15 @@ function resetRehabCounter() {
 
 // Switch to a different exercise
 function switchExercise(exerciseKey) {
+  // Handle rehab_mode selection specially
+  if (exerciseKey === "rehab_mode") {
+    showRehabModeUI("setup");
+    return;
+  }
+  
+  // Hide rehab mode UI and show standard exercise panel
+  showRehabModeUI("standard");
+  
   if (!EXERCISES[exerciseKey]) return;
   
   STATE.rehab.currentExercise = exerciseKey;
@@ -1534,6 +1585,11 @@ function loop() {
       const rehabRes = updateRehabMedic(lmRaw);
       updateRehabUI(rehabRes);
       
+      // Update rehab mode tracking if active
+      if (STATE.rehab.rehabModeActive) {
+        updateRehabModeTracking(rehabRes);
+      }
+      
       // Update angles if fall detection is not active
       if (!STATE.fallDetectionActive) {
         const angles = computeAngles(lmStream);
@@ -1549,6 +1605,366 @@ function loop() {
   }
   
   requestAnimationFrame(loop);
+}
+
+// ========== REHAB MODE FUNCTIONS ==========
+function showRehabModeUI(mode) {
+  // mode: "standard", "setup", "active", "complete"
+  if (UI.standardExercisePanel) {
+    UI.standardExercisePanel.classList.toggle("hidden", mode !== "standard");
+  }
+  if (UI.rehabModeSetup) {
+    UI.rehabModeSetup.classList.toggle("hidden", mode !== "setup");
+  }
+  if (UI.rehabModeActive) {
+    UI.rehabModeActive.classList.toggle("hidden", mode !== "active");
+  }
+  if (UI.rehabModeComplete) {
+    UI.rehabModeComplete.classList.toggle("hidden", mode !== "complete");
+  }
+  
+  STATE.rehab.rehabModePhase = mode;
+}
+
+function getExerciseDisplayName(type) {
+  const exercise = EXERCISES[type];
+  return exercise ? exercise.name : type;
+}
+
+function renderExerciseQueue() {
+  if (!UI.exerciseQueue) return;
+  
+  UI.exerciseQueue.innerHTML = "";
+  
+  STATE.rehab.exerciseQueue.forEach((item, index) => {
+    const div = document.createElement("div");
+    div.className = "exercise-queue-item";
+    div.innerHTML = `
+      <span class="order-num">${index + 1}</span>
+      <span class="exercise-name">${getExerciseDisplayName(item.type)}</span>
+      <span class="exercise-reps">${item.reps} reps</span>
+      <div class="move-btns">
+        <button class="move-up" data-index="${index}" ${index === 0 ? 'disabled' : ''}>↑</button>
+        <button class="move-down" data-index="${index}" ${index === STATE.rehab.exerciseQueue.length - 1 ? 'disabled' : ''}>↓</button>
+      </div>
+      <button class="remove-btn" data-index="${index}">×</button>
+    `;
+    UI.exerciseQueue.appendChild(div);
+  });
+  
+  // Enable/disable start button based on queue length
+  if (UI.startRehabBtn) {
+    UI.startRehabBtn.disabled = STATE.rehab.exerciseQueue.length === 0;
+  }
+}
+
+function addExerciseToQueue() {
+  if (!UI.addExerciseType || !UI.addExerciseReps) return;
+  
+  const type = UI.addExerciseType.value;
+  const repsValue = UI.addExerciseReps.value;
+  const reps = parseInt(repsValue, 10);
+  
+  if (isNaN(reps) || reps < 1 || reps > 100) {
+    showToast("Jumlah repetisi harus 1-100");
+    return;
+  }
+  
+  STATE.rehab.exerciseQueue.push({
+    type,
+    reps,
+    completedLeft: 0,
+    completedRight: 0,
+  });
+  
+  renderExerciseQueue();
+}
+
+function removeExerciseFromQueue(index) {
+  if (index >= 0 && index < STATE.rehab.exerciseQueue.length) {
+    STATE.rehab.exerciseQueue.splice(index, 1);
+    renderExerciseQueue();
+  }
+}
+
+function moveExerciseInQueue(index, direction) {
+  const newIndex = index + direction;
+  if (newIndex < 0 || newIndex >= STATE.rehab.exerciseQueue.length) return;
+  
+  const temp = STATE.rehab.exerciseQueue[index];
+  STATE.rehab.exerciseQueue[index] = STATE.rehab.exerciseQueue[newIndex];
+  STATE.rehab.exerciseQueue[newIndex] = temp;
+  
+  renderExerciseQueue();
+}
+
+function clearExerciseQueue() {
+  STATE.rehab.exerciseQueue = [];
+  renderExerciseQueue();
+}
+
+function startRehabWorkout() {
+  if (STATE.rehab.exerciseQueue.length === 0) {
+    showToast("Tambahkan latihan terlebih dahulu");
+    return;
+  }
+  
+  // Reset all exercise progress
+  STATE.rehab.exerciseQueue.forEach(item => {
+    item.completedLeft = 0;
+    item.completedRight = 0;
+  });
+  
+  STATE.rehab.currentExerciseIndex = 0;
+  STATE.rehab.rehabModeActive = true;
+  STATE.rehab.startTime = Date.now();
+  STATE.rehab.endTime = null;
+  
+  // Reset the internal rep counters
+  STATE.rehab.repsLeft = 0;
+  STATE.rehab.repsRight = 0;
+  STATE.rehab.repsCombined = 0;
+  STATE.rehab.stageLeft = null;
+  STATE.rehab.stageRight = null;
+  STATE.rehab.stageCombined = null;
+  
+  // Set current exercise
+  const currentExercise = STATE.rehab.exerciseQueue[0];
+  STATE.rehab.currentExercise = currentExercise.type;
+  
+  showRehabModeUI("active");
+  updateRehabModeActiveUI();
+  renderProgressQueue();
+  
+  setStatusText(`Rehab Mode aktif - ${getExerciseDisplayName(currentExercise.type)}`);
+}
+
+function resetRehabWorkout() {
+  STATE.rehab.rehabModeActive = false;
+  STATE.rehab.currentExerciseIndex = 0;
+  STATE.rehab.startTime = null;
+  STATE.rehab.endTime = null;
+  
+  // Reset internal counters
+  STATE.rehab.repsLeft = 0;
+  STATE.rehab.repsRight = 0;
+  STATE.rehab.repsCombined = 0;
+  STATE.rehab.stageLeft = null;
+  STATE.rehab.stageRight = null;
+  
+  // Reset exercise queue progress
+  STATE.rehab.exerciseQueue.forEach(item => {
+    item.completedLeft = 0;
+    item.completedRight = 0;
+  });
+  
+  showRehabModeUI("setup");
+  renderExerciseQueue();
+  setStatusText("Rehab Mode - Setup");
+}
+
+function updateRehabModeActiveUI() {
+  if (!STATE.rehab.rehabModeActive) return;
+  
+  const currentIndex = STATE.rehab.currentExerciseIndex;
+  if (currentIndex >= STATE.rehab.exerciseQueue.length) return;
+  
+  const currentExercise = STATE.rehab.exerciseQueue[currentIndex];
+  const exerciseConfig = EXERCISES[currentExercise.type];
+  
+  // Update current exercise display
+  if (UI.currentExerciseName) {
+    UI.currentExerciseName.textContent = getExerciseDisplayName(currentExercise.type);
+  }
+  
+  // Update progress - for exercises that track both sides separately
+  const trackBothSides = exerciseConfig ? exerciseConfig.trackBothSides : true;
+  
+  if (UI.rehabProgressLeft) {
+    UI.rehabProgressLeft.textContent = currentExercise.completedLeft;
+  }
+  if (UI.rehabProgressRight) {
+    UI.rehabProgressRight.textContent = currentExercise.completedRight;
+  }
+  if (UI.rehabTargetLeft) {
+    UI.rehabTargetLeft.textContent = currentExercise.reps;
+  }
+  if (UI.rehabTargetRight) {
+    UI.rehabTargetRight.textContent = currentExercise.reps;
+  }
+  
+  // Update total/completed stats
+  if (UI.rehabTotalExercises) {
+    UI.rehabTotalExercises.textContent = STATE.rehab.exerciseQueue.length;
+  }
+  if (UI.rehabCompletedExercises) {
+    UI.rehabCompletedExercises.textContent = currentIndex;
+  }
+}
+
+function renderProgressQueue() {
+  if (!UI.progressQueue) return;
+  
+  UI.progressQueue.innerHTML = "";
+  
+  STATE.rehab.exerciseQueue.forEach((item, index) => {
+    const currentIndex = STATE.rehab.currentExerciseIndex;
+    const isCompleted = index < currentIndex;
+    const isCurrent = index === currentIndex;
+    
+    const div = document.createElement("div");
+    div.className = `progress-queue-item ${isCurrent ? 'current' : ''} ${isCompleted ? 'completed' : ''}`;
+    
+    let statusIcon = "○";
+    let statusClass = "pending";
+    if (isCompleted) {
+      statusIcon = "✓";
+      statusClass = "done";
+    } else if (isCurrent) {
+      statusIcon = "▶";
+      statusClass = "active";
+    }
+    
+    const exerciseConfig = EXERCISES[item.type];
+    const trackBothSides = exerciseConfig ? exerciseConfig.trackBothSides : true;
+    
+    let progressText = "";
+    if (trackBothSides) {
+      progressText = `L: ${item.completedLeft}/${item.reps} | R: ${item.completedRight}/${item.reps}`;
+    } else {
+      const completed = Math.max(item.completedLeft, item.completedRight);
+      progressText = `${completed}/${item.reps}`;
+    }
+    
+    div.innerHTML = `
+      <span class="status-icon ${statusClass}">${statusIcon}</span>
+      <div class="exercise-info">
+        <span class="name">${getExerciseDisplayName(item.type)}</span>
+        <span class="reps">${progressText}</span>
+      </div>
+    `;
+    
+    UI.progressQueue.appendChild(div);
+  });
+}
+
+function checkExerciseCompletion() {
+  if (!STATE.rehab.rehabModeActive) return;
+  
+  const currentIndex = STATE.rehab.currentExerciseIndex;
+  if (currentIndex >= STATE.rehab.exerciseQueue.length) return;
+  
+  const currentExercise = STATE.rehab.exerciseQueue[currentIndex];
+  const exerciseConfig = EXERCISES[currentExercise.type];
+  const trackBothSides = exerciseConfig ? exerciseConfig.trackBothSides : true;
+  
+  let isComplete = false;
+  
+  if (trackBothSides) {
+    // Both sides need to reach target
+    isComplete = currentExercise.completedLeft >= currentExercise.reps && 
+                 currentExercise.completedRight >= currentExercise.reps;
+  } else {
+    // Either side reaching target counts (for squats, etc.)
+    const completed = Math.max(currentExercise.completedLeft, currentExercise.completedRight);
+    isComplete = completed >= currentExercise.reps;
+  }
+  
+  if (isComplete) {
+    // Move to next exercise
+    STATE.rehab.currentExerciseIndex++;
+    
+    // Reset internal counters for next exercise
+    STATE.rehab.repsLeft = 0;
+    STATE.rehab.repsRight = 0;
+    STATE.rehab.repsCombined = 0;
+    STATE.rehab.stageLeft = null;
+    STATE.rehab.stageRight = null;
+    
+    if (STATE.rehab.currentExerciseIndex >= STATE.rehab.exerciseQueue.length) {
+      // All exercises completed!
+      completeRehabWorkout();
+    } else {
+      // Set up next exercise
+      const nextExercise = STATE.rehab.exerciseQueue[STATE.rehab.currentExerciseIndex];
+      STATE.rehab.currentExercise = nextExercise.type;
+      
+      updateRehabModeActiveUI();
+      renderProgressQueue();
+      
+      setStatusText(`Rehab Mode - ${getExerciseDisplayName(nextExercise.type)}`);
+      showToast(`Latihan berikutnya: ${getExerciseDisplayName(nextExercise.type)}`);
+    }
+  }
+}
+
+function completeRehabWorkout() {
+  STATE.rehab.rehabModeActive = false;
+  STATE.rehab.endTime = Date.now();
+  
+  // Show completion screen
+  showRehabModeUI("complete");
+  
+  // Populate stats
+  if (UI.rehabCompleteStats) {
+    const durationStr = formatDuration(STATE.rehab.startTime, STATE.rehab.endTime);
+    
+    let totalReps = 0;
+    STATE.rehab.exerciseQueue.forEach(item => {
+      const exerciseConfig = EXERCISES[item.type];
+      if (exerciseConfig && exerciseConfig.trackBothSides) {
+        totalReps += item.completedLeft + item.completedRight;
+      } else {
+        totalReps += Math.max(item.completedLeft, item.completedRight);
+      }
+    });
+    
+    UI.rehabCompleteStats.innerHTML = `
+      <div class="stat-item">
+        <span>Total Latihan</span>
+        <span>${STATE.rehab.exerciseQueue.length}</span>
+      </div>
+      <div class="stat-item">
+        <span>Total Repetisi</span>
+        <span>${totalReps}</span>
+      </div>
+      <div class="stat-item">
+        <span>Durasi</span>
+        <span>${durationStr}</span>
+      </div>
+    `;
+  }
+  
+  setStatusText("Rehab selesai! 🎉");
+  showToast("🎉 Rehab selesai!");
+}
+
+function updateRehabModeTracking(rehabRes) {
+  if (!STATE.rehab.rehabModeActive) return;
+  
+  const currentIndex = STATE.rehab.currentExerciseIndex;
+  if (currentIndex >= STATE.rehab.exerciseQueue.length) return;
+  
+  const currentExercise = STATE.rehab.exerciseQueue[currentIndex];
+  
+  // Update completed reps from the tracking result
+  currentExercise.completedLeft = rehabRes.repsLeft;
+  currentExercise.completedRight = rehabRes.repsRight;
+  
+  // Update UI
+  updateRehabModeActiveUI();
+  renderProgressQueue();
+  
+  // Update FPS/Pose status in active panel
+  if (UI.fpsDisplayRehab) {
+    UI.fpsDisplayRehab.textContent = UI.fpsDisplay.textContent;
+  }
+  if (UI.poseStatusRehab) {
+    UI.poseStatusRehab.textContent = UI.poseStatus.textContent;
+  }
+  
+  // Check if current exercise is complete
+  checkExerciseCompletion();
 }
 
 // ========== EVENT HANDLERS ==========
@@ -1601,12 +2017,54 @@ UI.resetCounter.addEventListener("click", resetRehabCounter);
 // Exercise selector event handler
 if (UI.exerciseSelect) {
   UI.exerciseSelect.addEventListener("change", (e) => {
-    switchExercise(e.target.value);
+    const value = e.target.value;
+    switchExercise(value);
     if (STATE.rehabActive) {
-      const exercise = EXERCISES[e.target.value];
-      setStatusText(`Rehab Medic aktif - ${exercise ? exercise.name : "Unknown"}`);
+      if (value === "rehab_mode") {
+        setStatusText("Rehab Mode - Setup");
+      } else {
+        const exercise = EXERCISES[value];
+        setStatusText(`Rehab Medic aktif - ${exercise ? exercise.name : "Unknown"}`);
+      }
     }
   });
+}
+
+// Rehab Mode event handlers
+if (UI.addExerciseBtn) {
+  UI.addExerciseBtn.addEventListener("click", addExerciseToQueue);
+}
+
+if (UI.exerciseQueue) {
+  UI.exerciseQueue.addEventListener("click", (e) => {
+    const target = e.target;
+    if (target.classList.contains("remove-btn")) {
+      const index = parseInt(target.dataset.index, 10);
+      removeExerciseFromQueue(index);
+    } else if (target.classList.contains("move-up")) {
+      const index = parseInt(target.dataset.index, 10);
+      moveExerciseInQueue(index, -1);
+    } else if (target.classList.contains("move-down")) {
+      const index = parseInt(target.dataset.index, 10);
+      moveExerciseInQueue(index, 1);
+    }
+  });
+}
+
+if (UI.startRehabBtn) {
+  UI.startRehabBtn.addEventListener("click", startRehabWorkout);
+}
+
+if (UI.clearQueueBtn) {
+  UI.clearQueueBtn.addEventListener("click", clearExerciseQueue);
+}
+
+if (UI.resetRehabBtn) {
+  UI.resetRehabBtn.addEventListener("click", resetRehabWorkout);
+}
+
+if (UI.restartRehabBtn) {
+  UI.restartRehabBtn.addEventListener("click", resetRehabWorkout);
 }
 
 // Handle window resize
