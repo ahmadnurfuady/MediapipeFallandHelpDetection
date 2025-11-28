@@ -215,11 +215,13 @@ const EXERCISES = {
     idealDownAngle: 165,
     downCompare: ">",
     upCompare: "<",
+    // Note: joints config not used - specialLogic handles angle calculation
+    // Left displays knee angle, Right displays hip angle (both from left side of body)
     joints: {
-      left: { a: "LEFT_HIP", b: "LEFT_KNEE", c: "LEFT_ANKLE" },
-      right: { a: "LEFT_SHOULDER", b: "LEFT_HIP", c: "LEFT_KNEE" },
+      left: { a: "LEFT_HIP", b: "LEFT_KNEE", c: "LEFT_ANKLE" },     // Knee angle
+      right: { a: "LEFT_SHOULDER", b: "LEFT_HIP", c: "LEFT_KNEE" }, // Hip angle
     },
-    specialLogic: "sit_to_stand", // Custom processing
+    specialLogic: "sit_to_stand", // Custom processing bypasses standard joint calculation
   },
   shoulder_abduction: {
     name: "Shoulder Abduction",
