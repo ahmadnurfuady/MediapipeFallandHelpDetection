@@ -1,7 +1,7 @@
 // Integrated Fall Detection & Rehab Medic JavaScript
 // Combines both features with improved state management and controls
 // Includes ROI Transform for Sleeping Detection
-// Extended with Squats, Lateral Raises, and Form Accuracy tracking
+// Extended with 7 medical rehabilitation exercises and Rehab Mode
 
 import {
   PoseLandmarker,
@@ -120,24 +120,22 @@ const TELEGRAM = {
 
 // ========== EXERCISE CONFIGURATIONS ==========
 // Modular exercise configuration for easy addition of new exercises
+// 7 medical rehabilitation exercises
 const EXERCISES = {
   bicep_curls: {
-    name: "Bicep Curls",
+    name: "Bicep Curl",
     description: "Counter bicep curl untuk kedua tangan",
     // Track both arms separately
     trackBothSides: true,
     labelLeft: "Tangan Kiri",
     labelRight: "Tangan Kanan",
     // Angle thresholds for bicep curls (elbow angle: shoulder-elbow-wrist)
-    // Thresholds are slightly different from ideal to allow for transition detection
     upThreshold: 30,      // Arm curled up position (triggers rep count)
     downThreshold: 160,   // Arm extended down position (triggers "down" stage)
-    // Ideal angles for form accuracy calculation (target angles for perfect form)
-    idealUpAngle: 30,     // Ideal angle at top of curl (full contraction)
-    idealDownAngle: 160,  // Ideal angle at bottom of curl (matches threshold for consistency)
-    // Counter logic: "down" when angle > downThreshold, "up" transition when angle < upThreshold
-    // downCompare: ">" means stage becomes "down" when angle > downThreshold
-    // upCompare: "<" means stage becomes "up" (and rep counted) when angle < upThreshold
+    // Ideal angles for form accuracy calculation
+    idealUpAngle: 30,
+    idealDownAngle: 160,
+    // Counter logic
     downCompare: ">",
     upCompare: "<",
     // Joints to track
@@ -146,48 +144,119 @@ const EXERCISES = {
       right: { a: "RIGHT_SHOULDER", b: "RIGHT_ELBOW", c: "RIGHT_WRIST" },
     },
   },
-  squats: {
-    name: "Squats",
-    description: "Counter squat menggunakan sudut lutut",
-    // Track both legs together (combined counter)
-    trackBothSides: false,
-    labelLeft: "Kaki Kiri",
-    labelRight: "Kaki Kanan",
-    // Angle thresholds for squats (knee angle: hip-knee-ankle)
-    upThreshold: 160,     // Standing position (legs straight)
-    downThreshold: 90,    // Squat position (knees bent ~90°)
-    // Ideal angles for form accuracy
-    idealUpAngle: 170,    // Ideal standing angle
-    idealDownAngle: 90,   // Ideal squat depth angle
-    // Counter logic: "down" when angle < downThreshold, "up" transition when angle > upThreshold
-    downCompare: "<",
-    upCompare: ">",
-    // Joints to track
+  knee_extension: {
+    name: "Knee Extension",
+    description: "Latihan untuk quadriceps dan stabilitas lutut",
+    trackBothSides: true,
+    labelLeft: "Lutut Kiri",
+    labelRight: "Lutut Kanan",
+    // Knee angle (hip-knee-ankle): Flexed <100°, Extended >155°
+    upThreshold: 100,     // Flexed position
+    downThreshold: 155,   // Extended position
+    idealUpAngle: 90,
+    idealDownAngle: 165,
+    // Counter logic: "down" when extended (angle > downThreshold), "up" when flexed
+    downCompare: ">",
+    upCompare: "<",
     joints: {
       left: { a: "LEFT_HIP", b: "LEFT_KNEE", c: "LEFT_ANKLE" },
       right: { a: "RIGHT_HIP", b: "RIGHT_KNEE", c: "RIGHT_ANKLE" },
     },
   },
-  lateral_raises: {
-    name: "Lateral Raises",
-    description: "Counter lateral raise untuk kedua tangan",
-    // Track both arms separately
+  front_raise: {
+    name: "Front Raise",
+    description: "Melatih bahu bagian depan (Shoulder Flexion 90°)",
     trackBothSides: true,
-    labelLeft: "Tangan Kiri",
-    labelRight: "Tangan Kanan",
-    // Angle thresholds for lateral raises (shoulder angle: hip-shoulder-elbow)
-    upThreshold: 70,      // Arms raised to shoulder level (~90° but use 70 for detection)
-    downThreshold: 20,    // Arms down at sides
-    // Ideal angles for form accuracy
-    idealUpAngle: 90,     // Ideal raised position (parallel to ground)
-    idealDownAngle: 10,   // Ideal lowered position
-    // Counter logic: "down" when angle < downThreshold, "up" transition when angle > upThreshold
-    downCompare: "<",
-    upCompare: ">",
-    // Joints to track
+    labelLeft: "Bahu Kiri",
+    labelRight: "Bahu Kanan",
+    // Shoulder angle (elbow-shoulder-hip): Down <30°, Up ≥80°
+    upThreshold: 30,      // Down position
+    downThreshold: 80,    // Up position
+    idealUpAngle: 10,
+    idealDownAngle: 90,
+    // Counter logic: "down" when raised (angle > downThreshold), "up" when lowered
+    downCompare: ">",
+    upCompare: "<",
     joints: {
-      left: { a: "LEFT_HIP", b: "LEFT_SHOULDER", c: "LEFT_ELBOW" },
-      right: { a: "RIGHT_HIP", b: "RIGHT_SHOULDER", c: "RIGHT_ELBOW" },
+      left: { a: "LEFT_ELBOW", b: "LEFT_SHOULDER", c: "LEFT_HIP" },
+      right: { a: "RIGHT_ELBOW", b: "RIGHT_SHOULDER", c: "RIGHT_HIP" },
+    },
+  },
+  shoulder_flexion: {
+    name: "Shoulder Flexion",
+    description: "Rehabilitasi bahu hingga 150°",
+    trackBothSides: true,
+    labelLeft: "Bahu Kiri",
+    labelRight: "Bahu Kanan",
+    // Shoulder angle (elbow-shoulder-hip): Down <30°, Up ≥110°
+    upThreshold: 30,      // Down position
+    downThreshold: 110,   // Up position (higher than front raise)
+    idealUpAngle: 10,
+    idealDownAngle: 140,
+    // Counter logic
+    downCompare: ">",
+    upCompare: "<",
+    joints: {
+      left: { a: "LEFT_ELBOW", b: "LEFT_SHOULDER", c: "LEFT_HIP" },
+      right: { a: "RIGHT_ELBOW", b: "RIGHT_SHOULDER", c: "RIGHT_HIP" },
+    },
+  },
+  sit_to_stand: {
+    name: "Sit to Stand",
+    description: "Latihan fungsional tubuh bagian bawah",
+    trackBothSides: false,
+    labelLeft: "Sudut Lutut",
+    labelRight: "Sudut Pinggul",
+    // Knee: Sitting <100°, Standing ≥155°
+    // Hip: Sitting <100°, Standing ≥140°
+    upThreshold: 100,     // Sitting position
+    downThreshold: 155,   // Standing position (knee)
+    idealUpAngle: 90,
+    idealDownAngle: 165,
+    downCompare: ">",
+    upCompare: "<",
+    joints: {
+      left: { a: "LEFT_HIP", b: "LEFT_KNEE", c: "LEFT_ANKLE" },
+      right: { a: "LEFT_SHOULDER", b: "LEFT_HIP", c: "LEFT_KNEE" },
+    },
+    specialLogic: "sit_to_stand", // Custom processing
+  },
+  shoulder_abduction: {
+    name: "Shoulder Abduction",
+    description: "Lateral raise untuk bahu samping",
+    trackBothSides: true,
+    labelLeft: "Bahu Kiri",
+    labelRight: "Bahu Kanan",
+    // Shoulder lateral angle (wrist-shoulder-hip): Down <30°, Up ≥80°
+    upThreshold: 30,      // Down position
+    downThreshold: 80,    // Up position
+    idealUpAngle: 10,
+    idealDownAngle: 90,
+    // Counter logic
+    downCompare: ">",
+    upCompare: "<",
+    joints: {
+      left: { a: "LEFT_WRIST", b: "LEFT_SHOULDER", c: "LEFT_HIP" },
+      right: { a: "RIGHT_WRIST", b: "RIGHT_SHOULDER", c: "RIGHT_HIP" },
+    },
+  },
+  hip_abduction: {
+    name: "Hip Abduction",
+    description: "Memperkuat otot pinggul dan keseimbangan",
+    trackBothSides: true,
+    labelLeft: "Pinggul Kiri",
+    labelRight: "Pinggul Kanan",
+    // Hip angle (ankle-hip-shoulder): Neutral <20°, Abducted ≥45°
+    upThreshold: 20,      // Neutral position
+    downThreshold: 45,    // Abducted position
+    idealUpAngle: 5,
+    idealDownAngle: 50,
+    // Counter logic
+    downCompare: ">",
+    upCompare: "<",
+    joints: {
+      left: { a: "LEFT_ANKLE", b: "LEFT_HIP", c: "LEFT_SHOULDER" },
+      right: { a: "RIGHT_ANKLE", b: "RIGHT_HIP", c: "RIGHT_SHOULDER" },
     },
   },
 };
@@ -1083,6 +1152,66 @@ function processExerciseSide(lmRaw, exercise, side) {
   return { angle: STATE.rehab[smoothAngleKey], error };
 }
 
+// Special processing for Sit-to-Stand exercise
+// Uses two angles: knee angle and hip angle
+function processSitToStand(lmRaw, exercise) {
+  // Calculate knee angle (hip-knee-ankle)
+  const hipL = getPoint(lmRaw, MP_INDEX.LEFT_HIP);
+  const kneeL = getPoint(lmRaw, MP_INDEX.LEFT_KNEE);
+  const ankleL = getPoint(lmRaw, MP_INDEX.LEFT_ANKLE);
+  
+  // Calculate hip angle (shoulder-hip-knee)
+  const shoulderL = getPoint(lmRaw, MP_INDEX.LEFT_SHOULDER);
+  
+  let kneeAngle = null;
+  let hipAngle = null;
+  
+  if (hipL && kneeL && ankleL) {
+    kneeAngle = angleBetweenObj(hipL, kneeL, ankleL);
+  }
+  
+  if (shoulderL && hipL && kneeL) {
+    hipAngle = angleBetweenObj(shoulderL, hipL, kneeL);
+  }
+  
+  // Smooth angles
+  if (kneeAngle !== null) {
+    STATE.rehab.smoothAngleLeft = ema(STATE.rehab.smoothAngleLeft, kneeAngle, CONFIG.rehab.angleAlpha);
+  }
+  if (hipAngle !== null) {
+    STATE.rehab.smoothAngleRight = ema(STATE.rehab.smoothAngleRight, hipAngle, CONFIG.rehab.angleAlpha);
+  }
+  
+  // State machine: both angles must be in correct range
+  // Sitting: both angles < 100°
+  // Standing: knee >= 155° AND hip >= 140°
+  const kneeSmooth = STATE.rehab.smoothAngleLeft;
+  const hipSmooth = STATE.rehab.smoothAngleRight;
+  
+  if (kneeSmooth !== null && hipSmooth !== null) {
+    const bothFlexed = kneeSmooth < exercise.upThreshold && hipSmooth < exercise.upThreshold;
+    const bothExtended = kneeSmooth >= exercise.downThreshold && hipSmooth >= 140;
+    
+    if (bothFlexed) {
+      STATE.rehab.stageLeft = "sitting";
+    }
+    
+    if (bothExtended && STATE.rehab.stageLeft === "sitting") {
+      STATE.rehab.stageLeft = "standing";
+      STATE.rehab.repsLeft++;
+      STATE.rehab.repsRight = STATE.rehab.repsLeft; // Mirror for display
+    }
+    
+    STATE.rehab.stageRight = STATE.rehab.stageLeft;
+  }
+  
+  return {
+    angleLeft: STATE.rehab.smoothAngleLeft,
+    angleRight: STATE.rehab.smoothAngleRight,
+    error: null, // No form accuracy for this exercise
+  };
+}
+
 // Main rehab exercise update function
 function updateRehabMedic(lmRaw) {
   const exerciseKey = STATE.rehab.currentExercise;
@@ -1104,14 +1233,25 @@ function updateRehabMedic(lmRaw) {
     };
   }
   
-  // Process both sides using the helper function
-  const leftResult = processExerciseSide(lmRaw, exercise, "left");
-  const rightResult = processExerciseSide(lmRaw, exercise, "right");
+  let leftResult, rightResult;
   
-  // Update form accuracy
-  updateFormAccuracy(leftResult.error, rightResult.error, exercise);
+  // Special handling for sit-to-stand exercise
+  if (exercise.specialLogic === "sit_to_stand") {
+    const sitToStandResult = processSitToStand(lmRaw, exercise);
+    leftResult = { angle: sitToStandResult.angleLeft, error: sitToStandResult.error };
+    rightResult = { angle: sitToStandResult.angleRight, error: sitToStandResult.error };
+  } else {
+    // Process both sides using the standard helper function
+    leftResult = processExerciseSide(lmRaw, exercise, "left");
+    rightResult = processExerciseSide(lmRaw, exercise, "right");
+  }
   
-  // For exercises that don't track both sides separately (e.g., squats),
+  // Update form accuracy (skip for sit-to-stand)
+  if (exercise.specialLogic !== "sit_to_stand") {
+    updateFormAccuracy(leftResult.error, rightResult.error, exercise);
+  }
+  
+  // For exercises that don't track both sides separately,
   // use combined counter (whichever detected more)
   if (!exercise.trackBothSides) {
     STATE.rehab.repsCombined = Math.max(STATE.rehab.repsLeft, STATE.rehab.repsRight);
