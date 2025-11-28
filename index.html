@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Integrated Fall Detection & Rehab Medic</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Integrated page for Fall Detection, Sleeping Detection with ROI, and Rehab Medic (Bicep Curl) with improved controls." />
+  <meta name="description" content="Integrated page for Fall Detection, Sleeping Detection with ROI, and Rehab Medic with 7 medical rehabilitation exercises and Rehab Mode." />
   <link rel="stylesheet" href="styles.css" />
   <style>
     /* Integrated page specific styles */
@@ -1229,7 +1229,7 @@
           <div class="toggle-item disabled" id="rehab-toggle-item">
             <div class="toggle-label">
               <span>Rehab Medic</span>
-              <small>Bicep Curls, Squats, Lateral Raises</small>
+              <small>7 latihan rehabilitasi + Rehab Mode</small>
             </div>
             <label class="toggle-switch orange">
               <input type="checkbox" id="toggle-rehab" />
@@ -1287,16 +1287,20 @@
         <div class="exercise-selector">
           <label for="exercise-select">Pilih Latihan:</label>
           <select id="exercise-select">
-            <option value="bicep_curls">Bicep Curls</option>
-            <option value="squats">Squats</option>
-            <option value="lateral_raises">Lateral Raises</option>
-            <option value="rehab_mode">🎯 Rehab Mode</option>
+            <option value="bicep_curls">1. Bicep Curl</option>
+            <option value="knee_extension">2. Knee Extension</option>
+            <option value="front_raise">3. Front Raise</option>
+            <option value="shoulder_flexion">4. Shoulder Flexion</option>
+            <option value="sit_to_stand">5. Sit to Stand</option>
+            <option value="shoulder_abduction">6. Shoulder Abduction</option>
+            <option value="hip_abduction">7. Hip Abduction</option>
+            <option value="rehab_mode">🏥 Rehab Mode (Program)</option>
           </select>
         </div>
         
         <!-- Standard Exercise Display (shown when not in rehab mode) -->
         <div id="standard-exercise-panel">
-          <h3 id="exercise-title">Bicep Curls</h3>
+          <h3 id="exercise-title">Bicep Curl</h3>
           
           <!-- Form Accuracy Display -->
           <div class="form-accuracy-panel" id="form-accuracy-panel">
@@ -1354,9 +1358,13 @@
             <!-- Add Exercise Form -->
             <div class="add-exercise-form">
               <select id="add-exercise-type">
-                <option value="bicep_curls">Bicep Curls</option>
-                <option value="squats">Squats</option>
-                <option value="lateral_raises">Lateral Raises</option>
+                <option value="bicep_curls">Bicep Curl</option>
+                <option value="knee_extension">Knee Extension</option>
+                <option value="front_raise">Front Raise</option>
+                <option value="shoulder_flexion">Shoulder Flexion</option>
+                <option value="sit_to_stand">Sit to Stand</option>
+                <option value="shoulder_abduction">Shoulder Abduction</option>
+                <option value="hip_abduction">Hip Abduction</option>
               </select>
               <input type="number" id="add-exercise-reps" min="1" max="100" value="10" placeholder="Reps" />
               <button id="add-exercise-btn" class="primary">+ Tambah</button>
