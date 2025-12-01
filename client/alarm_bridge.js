@@ -7,6 +7,17 @@
 const BARDI_RESET_BUFFER_MS = 2000; // Buffer time after alarm completes (2 seconds)
 const BARDI_RESET_ERROR_MS = 3000;  // Reset time after error (3 seconds)
 
+// Timer management for auto-reset
+let bardiResetTimer = null;
+
+// Helper to clear any pending reset timer
+function clearBardiResetTimer() {
+  if (bardiResetTimer) {
+    clearTimeout(bardiResetTimer);
+    bardiResetTimer = null;
+  }
+}
+
 // replace existing postJson with this debug-safe version
 async function postJson(url, body) {
   try {
@@ -99,6 +110,9 @@ async function onDetectedAndNotified(eventType, confVal) {
     { code: "alarm_switch", value: true }
   ];
   
+  // Clear any pending reset timer before starting new one
+  clearBardiResetTimer();
+  
   try {
     let result;
     if (event.deviceId) {
@@ -117,16 +131,18 @@ async function onDetectedAndNotified(eventType, confVal) {
     const alarmDuration = tuyaCommands.find(c => c.code === 'alarm_time')?.value || 1;
     const resetDelay = (alarmDuration * 1000) + BARDI_RESET_BUFFER_MS;
     
-    setTimeout(() => {
+    bardiResetTimer = setTimeout(() => {
       updateBardiTriggerStatus('standby');
+      bardiResetTimer = null;
     }, resetDelay);
   } catch (e) {
     console.error('Tuya call failed', e);
     updateBardiTriggerStatus('failed');
     
     // Auto-reset to STANDBY after error
-    setTimeout(() => {
+    bardiResetTimer = setTimeout(() => {
       updateBardiTriggerStatus('standby');
+      bardiResetTimer = null;
     }, BARDI_RESET_ERROR_MS);
   }
 }
@@ -135,3 +151,4 @@ async function onDetectedAndNotified(eventType, confVal) {
 window.forwardAlarmToBackend = forwardAlarmToBackend;
 window.sendTuyaViaBackend = sendTuyaViaBackend;
 window.onDetectedAndNotified = onDetectedAndNotified;
+window.clearBardiResetTimer = clearBardiResetTimer;
