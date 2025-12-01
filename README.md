@@ -38,7 +38,7 @@ Kelompok 4:
   - Panel kontrol sederhana (threshold, smoothing) dan keyboard shortcut.
 
 Catatan:
-- Jika nama file fall detection berbeda (bukan `fall.html`), update tautan di `index.html`.
+- Semua fitur (Fall Detection dan Rehab Medic) sudah terintegrasi di `index.html`.
 
 ## Cara Menjalankan (Lokal)
 
@@ -68,7 +68,7 @@ Penting:
     - Arms crossed (tangan menyilang di dada) sustained.
     - One-hand raise-and-hold (satu tangan di atas bahu dalam durasi tertentu).
   - Notifikasi Telegram (via proxy Cloudflare Worker atau direct API) dengan cooldown.
-- File terkait: `fall.html` + script fall detection yang sudah ada di repo ini.
+- Fitur ini terintegrasi di `index.html`.
 
 ## Rehab Medic (Bicep Curl Counter)
 
@@ -95,9 +95,7 @@ Penting:
   - R: Reset
   - M: Mirror toggle
   - D: Debug toggle
-- File:
-  - Halaman: `rehab.html`
-  - Script: `js/rehan_medic_tasks.js` (single preview; model fixed)
+- Fitur ini terintegrasi di `index.html`.
 
 ## Panduan Penggunaan Singkat
 
