@@ -301,10 +301,11 @@
       }
     }
 
-    // Check if already authenticated
+    // Check if already authenticated WITH REAL ACCOUNT (not guest)
     if (initAuth) {
       initAuth().then((state) => {
-        if (state.isAuthenticated) {
+        // Only redirect if user is logged in with Google (not a guest)
+        if (state.isAuthenticated && !state.isGuest && state.user) {
           window.location.href = 'index.html';
         }
       }).catch(() => {});
