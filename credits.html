@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>Credits - MediaPipe Fall & Help Detection</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Credits page for MediaPipe Fall and Help Detection System" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .credits-container {
+      min-height: 100vh;
+      padding: 40px 20px;
+      background: linear-gradient(135deg, var(--bg) 0%, #0d1628 100%);
+    }
+
+    .credits-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .credits-logo {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, var(--blue), var(--green));
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+    }
+
+    .credits-logo svg {
+      width: 48px;
+      height: 48px;
+      fill: white;
+    }
+
+    .credits-title {
+      font-size: 32px;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+      color: var(--text);
+    }
+
+    .credits-subtitle {
+      font-size: 16px;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .credits-content {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .credits-section {
+      background: var(--panel);
+      border: 1px solid #1b2540;
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin: 0 0 20px 0;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #1b2540;
+    }
+
+    .team-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .team-member {
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+
+    .team-member:hover {
+      border-color: var(--blue);
+      transform: translateY(-2px);
+    }
+
+    .member-avatar {
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, var(--blue), var(--magenta));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 12px;
+      font-size: 24px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .member-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 0 0 4px 0;
+    }
+
+    .member-nim {
+      font-size: 13px;
+      color: var(--blue);
+      font-family: monospace;
+      margin: 0;
+    }
+
+    .info-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 16px;
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+
+    .info-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .info-icon {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, var(--blue), var(--green));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .info-icon svg {
+      width: 24px;
+      height: 24px;
+      fill: white;
+    }
+
+    .info-content {
+      flex: 1;
+    }
+
+    .info-label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin: 0 0 4px 0;
+    }
+
+    .info-value {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 0;
+    }
+
+    .tech-stack {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .tech-badge {
+      background: #15244a;
+      border: 1px solid #2b3b6b;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--panel);
+      border: 1px solid #2b3b6b;
+      border-radius: 10px;
+      padding: 12px 20px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s;
+      margin-bottom: 24px;
+    }
+
+    .back-btn:hover {
+      background: #15244a;
+      border-color: var(--blue);
+    }
+
+    .back-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .project-description {
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .project-description strong {
+      color: var(--text);
+    }
+
+    .footer-credits {
+      text-align: center;
+      padding: 32px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="credits-container">
+    <div class="credits-content">
+      <a href="index.html" class="back-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+        Kembali ke Aplikasi
+      </a>
+
+      <div class="credits-header">
+        <div class="credits-logo">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+          </svg>
+        </div>
+        <h1 class="credits-title">Credits</h1>
+        <p class="credits-subtitle">MediaPipe Fall & Help Detection System</p>
+      </div>
+
+      <!-- Project Description -->
+      <div class="credits-section">
+        <h2 class="section-title">📖 Tentang Proyek</h2>
+        <p class="project-description">
+          <strong>MediaPipe Fall & Help Detection</strong> adalah sistem deteksi jatuh dan gesture bantuan menggunakan MediaPipe pose estimation. 
+          Sistem ini dilengkapi dengan fitur <strong>Rehab Medic</strong> untuk 7 latihan rehabilitasi medis, 
+          integrasi dengan <strong>Telegram</strong> untuk notifikasi darurat, dan <strong>Bardi Smart Device</strong> untuk otomatisasi alarm.
+          Proyek ini dikembangkan sebagai tugas mata kuliah Kecerdasan Buatan Semester 5.
+        </p>
+      </div>
+
+      <!-- Team Members -->
+      <div class="credits-section">
+        <h2 class="section-title">👥 Anggota Tim</h2>
+        <div class="team-grid">
+          <div class="team-member">
+            <div class="member-avatar">AF</div>
+            <p class="member-name">Ahmad Nur Fuady</p>
+            <p class="member-nim">5323600005</p>
+          </div>
+          <div class="team-member">
+            <div class="member-avatar">MB</div>
+            <p class="member-name">Muhammad Bayu Iskandar</p>
+            <p class="member-nim">5323600025</p>
+          </div>
+          <div class="team-member">
+            <div class="member-avatar">AR</div>
+            <p class="member-name">Armany Rizqullah Saputra</p>
+            <p class="member-nim">5323600029</p>
+          </div>
+          <div class="team-member">
+            <div class="member-avatar">MR</div>
+            <p class="member-name">M Rafif Zaidan Nuhaa</p>
+            <p class="member-nim">5323600013</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dosen Pengampu -->
+      <div class="credits-section">
+        <h2 class="section-title">👨‍🏫 Dosen Pengampu</h2>
+        <div class="info-item">
+          <div class="info-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path d="M12 3L1 9l11 6 9-4.91V17h2V9M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/>
+            </svg>
+          </div>
+          <div class="info-content">
+            <p class="info-label">Nama Dosen</p>
+            <p class="info-value">Sritrusta Sukaridhoto, ST., Ph.D.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Course & Institution -->
+      <div class="credits-section">
+        <h2 class="section-title">🎓 Informasi Akademik</h2>
+        <div class="info-item">
+          <div class="info-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+            </svg>
+          </div>
+          <div class="info-content">
+            <p class="info-label">Mata Kuliah</p>
+            <p class="info-value">Kecerdasan Buatan (Semester 5)</p>
+          </div>
+        </div>
+        <div class="info-item">
+          <div class="info-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3zm6 9.09c0 4-2.55 7.7-6 8.83-3.45-1.13-6-4.82-6-8.83v-4.7l6-2.25 6 2.25v4.7z"/>
+            </svg>
+          </div>
+          <div class="info-content">
+            <p class="info-label">Jurusan</p>
+            <p class="info-value">Teknologi Rekayasa Multimedia</p>
+          </div>
+        </div>
+        <div class="info-item">
+          <div class="info-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/>
+            </svg>
+          </div>
+          <div class="info-content">
+            <p class="info-label">Kampus</p>
+            <p class="info-value">Politeknik Elektronika Negeri Surabaya</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Technology Stack -->
+      <div class="credits-section">
+        <h2 class="section-title">🛠️ Teknologi yang Digunakan</h2>
+        <div class="tech-stack">
+          <span class="tech-badge">MediaPipe</span>
+          <span class="tech-badge">JavaScript ES6+</span>
+          <span class="tech-badge">HTML5 / CSS3</span>
+          <span class="tech-badge">Firebase Auth</span>
+          <span class="tech-badge">Firebase Firestore</span>
+          <span class="tech-badge">Telegram Bot API</span>
+          <span class="tech-badge">Tuya Smart</span>
+          <span class="tech-badge">Cloudflare Workers</span>
+          <span class="tech-badge">Netlify</span>
+          <span class="tech-badge">Express.js</span>
+        </div>
+      </div>
+
+      <div class="footer-credits">
+        <p>© 2024 MediaPipe Fall & Help Detection. Dikembangkan dengan ❤️ untuk tugas Kecerdasan Buatan.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

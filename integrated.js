@@ -2,11 +2,24 @@
 // Combines both features with improved state management and controls
 // Includes ROI Transform for Sleeping Detection
 // Extended with 7 medical rehabilitation exercises and Rehab Mode
+// Updated with Firebase integration, authentication, and enhanced UI
 
 import {
   PoseLandmarker,
   FilesetResolver,
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+// Import Firebase config (async loading for compatibility)
+let firebaseModule = null;
+async function loadFirebase() {
+  try {
+    firebaseModule = await import('./firebase-config.js');
+    return firebaseModule;
+  } catch (error) {
+    console.warn('Firebase module not available:', error);
+    return null;
+  }
+}
 
 // ========== DOM ELEMENTS ==========
 const UI = {
@@ -92,6 +105,13 @@ const UI = {
   poseStatusRehab: document.getElementById("pose-status-rehab"),
   rehabCompleteStats: document.getElementById("rehab-complete-stats"),
   
+  // Enlarged Rehab Stats (new)
+  rehabBigLeft: document.getElementById("rehab-big-left"),
+  rehabBigRight: document.getElementById("rehab-big-right"),
+  rehabTargetLeftBig: document.getElementById("rehab-target-left-big"),
+  rehabTargetRightBig: document.getElementById("rehab-target-right-big"),
+  storageIndicatorActive: document.getElementById("storage-indicator-active"),
+  
   // Angles Panel
   anglesPanel: document.getElementById("angles-panel"),
   angLeftElbow: document.getElementById("ang-left-elbow"),
@@ -106,6 +126,25 @@ const UI = {
   // Toast & Audio
   toast: document.getElementById("toast"),
   audio: document.getElementById("alert-sound"),
+  
+  // Status Indicators (new)
+  bardiStatus: document.getElementById("bardi-status"),
+  telegramStatus: document.getElementById("telegram-status"),
+  
+  // User Profile Elements (new)
+  userProfile: document.getElementById("user-profile"),
+  userAvatar: document.getElementById("user-avatar"),
+  userName: document.getElementById("user-name"),
+  logoutBtn: document.getElementById("logout-btn"),
+  guestBadge: document.getElementById("guest-badge"),
+  
+  // Calibration Modal (new)
+  calibrationModal: document.getElementById("calibration-modal"),
+  calibrationStatus: document.getElementById("calibration-status"),
+  calibrationStatusIcon: document.getElementById("calibration-status-icon"),
+  calibrationStatusText: document.getElementById("calibration-status-text"),
+  calibrationConfirmBtn: document.getElementById("calibration-confirm-btn"),
+  calibrationSkipBtn: document.getElementById("calibration-skip-btn"),
 };
 
 // ========== TELEGRAM CONFIG ==========
@@ -397,6 +436,29 @@ const STATE = {
     currentExerciseIndex: 0,     // Index of current exercise in queue
     startTime: null,             // When the workout started
     endTime: null,               // When the workout ended
+  },
+  
+  // Authentication State (new)
+  auth: {
+    user: null,
+    isGuest: false,
+    isAuthenticated: false,
+  },
+  
+  // Calibration State (new)
+  calibration: {
+    isCalibrated: false,
+    poseDetected: false,
+    allLandmarksVisible: false,
+    pendingAction: null,  // "fall" or "rehab" - what to enable after calibration
+  },
+  
+  // Connection Status (new)
+  connections: {
+    bardiConnected: false,
+    telegramConnected: false,
+    lastBardiCheck: 0,
+    lastTelegramCheck: 0,
   },
 };
 
@@ -888,6 +950,302 @@ function updateFPS() {
     ? STATE.fpsHistory.reduce((a, b) => a + b, 0) / STATE.fpsHistory.length 
     : 0;
   UI.fpsDisplay.textContent = avgFps.toFixed(1);
+}
+
+// ========== AUTHENTICATION & USER MANAGEMENT ==========
+async function initializeAuth() {
+  const firebase = await loadFirebase();
+  if (!firebase) {
+    // Firebase not available, check if guest mode or allow anonymous
+    const isGuest = localStorage.getItem("guestMode") === "true";
+    if (isGuest) {
+      STATE.auth.isGuest = true;
+      STATE.auth.isAuthenticated = true;
+    } else {
+      // Allow usage without login (anonymous mode)
+      STATE.auth.isGuest = true;
+      STATE.auth.isAuthenticated = true;
+      localStorage.setItem("guestMode", "true");
+    }
+    updateUserProfileUI();
+    return;
+  }
+  
+  const authState = await firebase.initAuth();
+  STATE.auth.user = authState.user;
+  STATE.auth.isGuest = authState.isGuest;
+  STATE.auth.isAuthenticated = authState.isAuthenticated;
+  
+  if (!STATE.auth.isAuthenticated) {
+    // Allow usage without login (anonymous mode) - don't redirect
+    STATE.auth.isGuest = true;
+    STATE.auth.isAuthenticated = true;
+    localStorage.setItem("guestMode", "true");
+  }
+  
+  updateUserProfileUI();
+  
+  // Listen for auth changes
+  firebase.onAuthChange((state) => {
+    STATE.auth.user = state.user;
+    STATE.auth.isGuest = state.isGuest;
+    STATE.auth.isAuthenticated = state.isAuthenticated;
+    updateUserProfileUI();
+  });
+}
+
+function updateUserProfileUI() {
+  if (UI.userProfile && UI.guestBadge) {
+    if (STATE.auth.user) {
+      // Logged in user
+      UI.userProfile.classList.remove("hidden");
+      UI.guestBadge.classList.add("hidden");
+      
+      if (UI.userAvatar && STATE.auth.user.photoURL) {
+        UI.userAvatar.src = STATE.auth.user.photoURL;
+      }
+      if (UI.userName) {
+        UI.userName.textContent = STATE.auth.user.displayName || STATE.auth.user.email || "User";
+      }
+    } else if (STATE.auth.isGuest) {
+      // Guest mode
+      UI.userProfile.classList.add("hidden");
+      UI.guestBadge.classList.remove("hidden");
+    } else {
+      // Not authenticated
+      UI.userProfile.classList.add("hidden");
+      UI.guestBadge.classList.add("hidden");
+    }
+  }
+  
+  // Update storage indicator
+  updateStorageIndicator();
+}
+
+function updateStorageIndicator() {
+  const indicator = UI.storageIndicatorActive;
+  if (!indicator) return;
+  
+  if (STATE.auth.user) {
+    indicator.className = "storage-indicator firebase";
+    indicator.innerHTML = '<span class="storage-indicator-icon">☁️</span><span>Data disimpan ke Firebase</span>';
+  } else if (STATE.auth.isGuest) {
+    indicator.className = "storage-indicator guest";
+    indicator.innerHTML = '<span class="storage-indicator-icon">⚠️</span><span>Data disimpan sementara (mode tamu)</span>';
+  }
+}
+
+async function handleLogout() {
+  const firebase = await loadFirebase();
+  if (firebase) {
+    await firebase.logOut();
+  }
+  localStorage.removeItem("guestMode");
+  window.location.href = "login.html";
+}
+
+// ========== STATUS INDICATORS ==========
+function updateStatusIndicators() {
+  // Update Bardi status
+  const bardiConnected = !!window.TUYA_DEVICE_ID && window.BACKEND_BASE !== '';
+  STATE.connections.bardiConnected = bardiConnected;
+  if (UI.bardiStatus) {
+    UI.bardiStatus.textContent = bardiConnected ? "ON" : "OFF";
+    UI.bardiStatus.className = `indicator-status ${bardiConnected ? 'on' : 'off'}`;
+  }
+  
+  // Update Telegram status
+  const telegramConnected = TELEGRAM.enabled && (TELEGRAM.proxyUrl || TELEGRAM.botToken);
+  STATE.connections.telegramConnected = telegramConnected;
+  if (UI.telegramStatus) {
+    UI.telegramStatus.textContent = telegramConnected ? "ON" : "OFF";
+    UI.telegramStatus.className = `indicator-status ${telegramConnected ? 'on' : 'off'}`;
+  }
+}
+
+// Test Telegram connection
+async function testTelegramConnection() {
+  try {
+    // Simple check - we'll mark it as connected if config is present
+    const connected = TELEGRAM.enabled && (TELEGRAM.proxyUrl || TELEGRAM.botToken);
+    STATE.connections.telegramConnected = connected;
+    updateStatusIndicators();
+    return connected;
+  } catch {
+    STATE.connections.telegramConnected = false;
+    updateStatusIndicators();
+    return false;
+  }
+}
+
+// ========== CALIBRATION SYSTEM ==========
+function showCalibrationModal(pendingAction) {
+  STATE.calibration.pendingAction = pendingAction;
+  STATE.calibration.isCalibrated = false;
+  STATE.calibration.poseDetected = false;
+  
+  if (UI.calibrationModal) {
+    UI.calibrationModal.classList.remove("hidden");
+  }
+  
+  updateCalibrationStatus();
+}
+
+function hideCalibrationModal() {
+  if (UI.calibrationModal) {
+    UI.calibrationModal.classList.add("hidden");
+  }
+  STATE.calibration.pendingAction = null;
+}
+
+function updateCalibrationStatus() {
+  if (!UI.calibrationStatus || !UI.calibrationStatusIcon || !UI.calibrationStatusText || !UI.calibrationConfirmBtn) {
+    return;
+  }
+  
+  if (STATE.calibration.allLandmarksVisible) {
+    UI.calibrationStatus.classList.remove("detecting");
+    UI.calibrationStatus.classList.add("ready");
+    UI.calibrationStatusIcon.textContent = "✅";
+    UI.calibrationStatusText.textContent = "Pose terdeteksi dengan baik!";
+    UI.calibrationConfirmBtn.disabled = false;
+  } else if (STATE.calibration.poseDetected) {
+    UI.calibrationStatus.classList.add("detecting");
+    UI.calibrationStatus.classList.remove("ready");
+    UI.calibrationStatusIcon.textContent = "⚠️";
+    UI.calibrationStatusText.textContent = "Pose terdeteksi, tapi beberapa titik tidak terlihat";
+    UI.calibrationConfirmBtn.disabled = true;
+  } else {
+    UI.calibrationStatus.classList.add("detecting");
+    UI.calibrationStatus.classList.remove("ready");
+    UI.calibrationStatusIcon.textContent = "⏳";
+    UI.calibrationStatusText.textContent = "Mendeteksi pose...";
+    UI.calibrationConfirmBtn.disabled = true;
+  }
+}
+
+function checkPoseCalibration(landmarks) {
+  if (!landmarks || landmarks.length < 33) {
+    STATE.calibration.poseDetected = false;
+    STATE.calibration.allLandmarksVisible = false;
+    return;
+  }
+  
+  STATE.calibration.poseDetected = true;
+  
+  // Check if key landmarks are visible
+  const keyLandmarks = [
+    0,  // nose
+    11, 12,  // shoulders
+    13, 14,  // elbows
+    15, 16,  // wrists
+    23, 24,  // hips
+    25, 26,  // knees
+    27, 28   // ankles
+  ];
+  
+  const visibilityThreshold = 0.5;
+  const allVisible = keyLandmarks.every(idx => {
+    const lm = landmarks[idx];
+    return lm && (lm.visibility || 0) > visibilityThreshold;
+  });
+  
+  STATE.calibration.allLandmarksVisible = allVisible;
+  
+  // Update calibration UI
+  if (UI.calibrationModal && !UI.calibrationModal.classList.contains("hidden")) {
+    updateCalibrationStatus();
+  }
+}
+
+function confirmCalibration() {
+  STATE.calibration.isCalibrated = true;
+  hideCalibrationModal();
+  
+  // Enable the pending action
+  if (STATE.calibration.pendingAction === "fall") {
+    STATE.fallDetectionActive = true;
+    UI.toggleFall.checked = true;
+    updateFeatureToggles();
+    setStatusText("Fall Detection aktif");
+  } else if (STATE.calibration.pendingAction === "rehab") {
+    STATE.rehabActive = true;
+    UI.toggleRehab.checked = true;
+    updateFeatureToggles();
+    const exercise = EXERCISES[STATE.rehab.currentExercise];
+    setStatusText(`Rehab Medic aktif - ${exercise ? exercise.name : "Unknown"}`);
+  }
+  
+  STATE.calibration.pendingAction = null;
+}
+
+function skipCalibration() {
+  hideCalibrationModal();
+  
+  // Enable the pending action anyway
+  if (STATE.calibration.pendingAction === "fall") {
+    STATE.fallDetectionActive = true;
+    UI.toggleFall.checked = true;
+    updateFeatureToggles();
+    setStatusText("Fall Detection aktif (tanpa kalibrasi)");
+  } else if (STATE.calibration.pendingAction === "rehab") {
+    STATE.rehabActive = true;
+    UI.toggleRehab.checked = true;
+    updateFeatureToggles();
+    const exercise = EXERCISES[STATE.rehab.currentExercise];
+    setStatusText(`Rehab Medic aktif - ${exercise ? exercise.name : "Unknown"}`);
+  }
+  
+  STATE.calibration.pendingAction = null;
+}
+
+// ========== SAVE REHAB HISTORY ==========
+async function saveRehabHistory(rehabData) {
+  const firebase = await loadFirebase();
+  
+  if (firebase && STATE.auth.user) {
+    // Save to Firebase
+    const result = await firebase.saveRehabHistory(rehabData);
+    if (result.success) {
+      showToast("✅ Data disimpan ke cloud");
+    } else {
+      showToast("❌ Gagal menyimpan ke cloud");
+    }
+    return result;
+  } else if (STATE.auth.isGuest) {
+    // Save to localStorage
+    try {
+      const existingHistory = JSON.parse(localStorage.getItem("guestRehabHistory") || "[]");
+      existingHistory.push({
+        ...rehabData,
+        timestamp: new Date().toISOString()
+      });
+      localStorage.setItem("guestRehabHistory", JSON.stringify(existingHistory));
+      showToast("💾 Data disimpan sementara");
+      return { success: true };
+    } catch (error) {
+      console.error("Error saving to localStorage:", error);
+      return { success: false, error: error.message };
+    }
+  }
+  
+  return { success: false, error: "Not authenticated" };
+}
+
+// ========== ENLARGED STATS UPDATE ==========
+function updateEnlargedRehabStats(leftReps, rightReps, targetLeft, targetRight) {
+  if (UI.rehabBigLeft) {
+    UI.rehabBigLeft.textContent = leftReps;
+  }
+  if (UI.rehabBigRight) {
+    UI.rehabBigRight.textContent = rightReps;
+  }
+  if (UI.rehabTargetLeftBig) {
+    UI.rehabTargetLeftBig.textContent = targetLeft;
+  }
+  if (UI.rehabTargetRightBig) {
+    UI.rehabTargetRightBig.textContent = targetRight;
+  }
 }
 
 // ========== FALL DETECTION LOGIC ==========
@@ -1708,6 +2066,9 @@ function loop() {
     const lmDisp = getPts(lmRaw, dispW, dispH);
     const lmStream = getPts(lmRaw, CONFIG.streamW, CONFIG.streamH);
     
+    // Check pose calibration if modal is open
+    checkPoseCalibration(lmRaw);
+    
     // Draw skeleton if any detection is active
     if (STATE.fallDetectionActive || STATE.rehabActive) {
       drawSkeleton(ctx, lmDisp, dispW, dispH);
@@ -1744,6 +2105,9 @@ function loop() {
       UI.fallConfidence.textContent = "0%";
       UI.helpGesture.textContent = "OFF";
     }
+    
+    // Update calibration status if modal is open
+    checkPoseCalibration(null);
   }
   
   requestAnimationFrame(loop);
@@ -1935,6 +2299,14 @@ function updateRehabModeActiveUI() {
     UI.rehabTargetRight.textContent = currentExercise.reps;
   }
   
+  // Update ENLARGED stats
+  updateEnlargedRehabStats(
+    currentExercise.completedLeft,
+    currentExercise.completedRight,
+    currentExercise.reps,
+    currentExercise.reps
+  );
+  
   // Update total/completed stats
   if (UI.rehabTotalExercises) {
     UI.rehabTotalExercises.textContent = STATE.rehab.exerciseQueue.length;
@@ -2047,20 +2419,24 @@ function completeRehabWorkout() {
   // Show completion screen
   showRehabModeUI("complete");
   
-  // Populate stats
+  // Calculate stats
+  const durationStr = formatDuration(STATE.rehab.startTime, STATE.rehab.endTime);
+  const durationS = Math.round((STATE.rehab.endTime - STATE.rehab.startTime) / 1000);
+  
+  let totalReps = 0;
+  const exerciseNames = [];
+  STATE.rehab.exerciseQueue.forEach(item => {
+    const exerciseConfig = EXERCISES[item.type];
+    exerciseNames.push(getExerciseDisplayName(item.type));
+    if (exerciseConfig && exerciseConfig.trackBothSides) {
+      totalReps += item.completedLeft + item.completedRight;
+    } else {
+      totalReps += Math.max(item.completedLeft, item.completedRight);
+    }
+  });
+  
+  // Populate stats UI
   if (UI.rehabCompleteStats) {
-    const durationStr = formatDuration(STATE.rehab.startTime, STATE.rehab.endTime);
-    
-    let totalReps = 0;
-    STATE.rehab.exerciseQueue.forEach(item => {
-      const exerciseConfig = EXERCISES[item.type];
-      if (exerciseConfig && exerciseConfig.trackBothSides) {
-        totalReps += item.completedLeft + item.completedRight;
-      } else {
-        totalReps += Math.max(item.completedLeft, item.completedRight);
-      }
-    });
-    
     UI.rehabCompleteStats.innerHTML = `
       <div class="stat-item">
         <span>Total Latihan</span>
@@ -2076,6 +2452,17 @@ function completeRehabWorkout() {
       </div>
     `;
   }
+  
+  // Save rehab history
+  const rehabHistoryData = {
+    namaLatihan: exerciseNames.join(", "),
+    repetisi: STATE.rehab.exerciseQueue.reduce((sum, item) => sum + item.reps, 0),
+    totalLatihan: STATE.rehab.exerciseQueue.length,
+    totalRepetisi: totalReps,
+    durasi: durationS
+  };
+  
+  saveRehabHistory(rehabHistoryData);
   
   setStatusText("Rehab selesai! 🎉");
   showToast("🎉 Rehab selesai!");
@@ -2124,15 +2511,20 @@ UI.toggleFall.addEventListener("change", (e) => {
     e.target.checked = false;
     return;
   }
-  STATE.fallDetectionActive = e.target.checked;
-  updateFeatureToggles();
   
-  if (STATE.fallDetectionActive) {
-    setStatusText("Fall Detection aktif");
-  } else if (STATE.rehabActive) {
-    setStatusText("Rehab Medic aktif");
+  if (e.target.checked) {
+    // Show calibration modal before enabling
+    showCalibrationModal("fall");
+    e.target.checked = false;  // Reset until calibration is confirmed
   } else {
-    setStatusText("Kamera aktif. Pilih fitur deteksi.");
+    STATE.fallDetectionActive = false;
+    updateFeatureToggles();
+    
+    if (STATE.rehabActive) {
+      setStatusText("Rehab Medic aktif");
+    } else {
+      setStatusText("Kamera aktif. Pilih fitur deteksi.");
+    }
   }
 });
 
@@ -2141,16 +2533,20 @@ UI.toggleRehab.addEventListener("change", (e) => {
     e.target.checked = false;
     return;
   }
-  STATE.rehabActive = e.target.checked;
-  updateFeatureToggles();
   
-  if (STATE.rehabActive) {
-    const exercise = EXERCISES[STATE.rehab.currentExercise];
-    setStatusText(`Rehab Medic aktif - ${exercise ? exercise.name : "Unknown"}`);
-  } else if (STATE.fallDetectionActive) {
-    setStatusText("Fall Detection aktif");
+  if (e.target.checked) {
+    // Show calibration modal before enabling
+    showCalibrationModal("rehab");
+    e.target.checked = false;  // Reset until calibration is confirmed
   } else {
-    setStatusText("Kamera aktif. Pilih fitur deteksi.");
+    STATE.rehabActive = false;
+    updateFeatureToggles();
+    
+    if (STATE.fallDetectionActive) {
+      setStatusText("Fall Detection aktif");
+    } else {
+      setStatusText("Kamera aktif. Pilih fitur deteksi.");
+    }
   }
 });
 
@@ -2223,8 +2619,22 @@ document.body.addEventListener("click", () => {
   } catch {}
 }, { once: true });
 
+// Calibration modal event handlers
+if (UI.calibrationConfirmBtn) {
+  UI.calibrationConfirmBtn.addEventListener("click", confirmCalibration);
+}
+
+if (UI.calibrationSkipBtn) {
+  UI.calibrationSkipBtn.addEventListener("click", skipCalibration);
+}
+
+// Logout button event handler
+if (UI.logoutBtn) {
+  UI.logoutBtn.addEventListener("click", handleLogout);
+}
+
 // ========== INITIALIZATION ==========
-function init() {
+async function init() {
   // Load saved ROI from localStorage
   STATE.bedROI = loadROI();
   updateROIStatus();
@@ -2245,6 +2655,12 @@ function init() {
   
   setStatusText("Kamera belum aktif");
   updateFeatureToggles();
+  
+  // Update status indicators
+  updateStatusIndicators();
+  
+  // Initialize authentication
+  await initializeAuth();
 }
 
 init();
