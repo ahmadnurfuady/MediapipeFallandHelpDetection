@@ -108,9 +108,22 @@ async function onDetectedAndNotified(eventType, confVal) {
     
     console.log('Tuya result', result);
     updateBardiTriggerStatus('success');
+    
+    // Auto-reset ke STANDBY setelah alarm selesai
+    const alarmDuration = tuyaCommands.find(c => c.code === 'alarm_time')?.value || 1;
+    const resetDelay = (alarmDuration * 1000) + 2000; // alarm duration + 2s buffer
+    
+    setTimeout(() => {
+      updateBardiTriggerStatus('standby');
+    }, resetDelay);
   } catch (e) {
     console.error('Tuya call failed', e);
     updateBardiTriggerStatus('failed');
+    
+    // Auto-reset ke STANDBY setelah error
+    setTimeout(() => {
+      updateBardiTriggerStatus('standby');
+    }, 3000); // 3 detik setelah error
   }
 }
 
