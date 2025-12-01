@@ -2701,28 +2701,14 @@ async function deleteHistoryItem(itemId) {
         return;
       }
     } else if (STATE.auth.isGuest) {
-      // Delete from localStorage
-      const history = JSON.parse(localStorage.getItem('guestRehabHistory') || '[]');
-      const index = parseInt(itemId.replace('local_', ''), 10);
-      if (!isNaN(index) && index >= 0 && index < history.length) {
-        // We need to recalculate the index since items are sorted by timestamp desc
-        const originalIndex = STATE.history.items.length - 1 - STATE.history.items.findIndex(item => item.id === itemId);
-        history.splice(history.length - 1 - STATE.history.items.findIndex(item => item.id === itemId), 1);
-        // Actually just reload the history properly
-        const filteredHistory = history.filter((_, idx) => {
-          const mappedId = `local_${idx}`;
-          return mappedId !== itemId;
-        });
-        // Rebuild properly - we need to find which original item matches
-      }
-      
-      // Simpler approach: reload history after filtering
+      // Delete from localStorage - find by timestamp match
       const sortedHistory = JSON.parse(localStorage.getItem('guestRehabHistory') || '[]');
       const itemIndex = STATE.history.items.findIndex(item => item.id === itemId);
+      
       if (itemIndex !== -1) {
-        // Find the original index in unsorted array
         const targetTimestamp = STATE.history.items[itemIndex].timestamp;
         const originalIndex = sortedHistory.findIndex(item => item.timestamp === targetTimestamp);
+        
         if (originalIndex !== -1) {
           sortedHistory.splice(originalIndex, 1);
           localStorage.setItem('guestRehabHistory', JSON.stringify(sortedHistory));
