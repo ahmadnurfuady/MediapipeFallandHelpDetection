@@ -1100,24 +1100,29 @@ function updateStatusIndicators() {
     if (!bardiConfigured) {
       UI.bardiStatus.textContent = "NOT SET";
       UI.bardiStatus.className = "indicator-status off";
+      STATE.connections.bardiConnected = false;
     } else {
       const lastTrigger = localStorage.getItem('lastBardiTriggerStatus');
       
       if (lastTrigger === 'success') {
         UI.bardiStatus.textContent = "CONNECTED";
         UI.bardiStatus.className = "indicator-status on";
+        STATE.connections.bardiConnected = true;
       } else if (lastTrigger === 'failed') {
         UI.bardiStatus.textContent = "FAILED";
         UI.bardiStatus.className = "indicator-status off";
+        STATE.connections.bardiConnected = false;
       } else {
         UI.bardiStatus.textContent = "STANDBY";
         UI.bardiStatus.className = "indicator-status standby";
+        STATE.connections.bardiConnected = false;
       }
     }
   }
   
   // Telegram status (keep existing logic)
   const telegramConnected = TELEGRAM.enabled && (TELEGRAM.proxyUrl || TELEGRAM.botToken);
+  STATE.connections.telegramConnected = telegramConnected;
   if (UI.telegramStatus) {
     UI.telegramStatus.textContent = telegramConnected ? "ON" : "OFF";
     UI.telegramStatus.className = `indicator-status ${telegramConnected ? 'on' : 'off'}`;
@@ -2835,7 +2840,7 @@ async function startCameraWithDevice(deviceId) {
     
   } catch (err) {
     console.error("Camera error:", err);
-    setStatusText("Gagal mengakses kamera");
+    setStatusText("Gagal mengakses kamera. Periksa izin.");
     showLoading(false);
     UI.toggleCamera.checked = false;
     STATE.cameraActive = false;
