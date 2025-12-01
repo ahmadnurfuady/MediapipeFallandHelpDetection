@@ -1083,6 +1083,15 @@ function updateStorageIndicator() {
 }
 
 async function handleLogout() {
+  // Clear any pending Bardi reset timer
+  if (typeof window.clearBardiResetTimer === 'function') {
+    window.clearBardiResetTimer();
+  }
+  
+  // Reset Bardi status before logout
+  localStorage.removeItem('lastBardiTriggerStatus');
+  updateStatusIndicators(); // Will show "STANDBY"
+  
   const firebase = await loadFirebase();
   if (firebase) {
     await firebase.logOut();
