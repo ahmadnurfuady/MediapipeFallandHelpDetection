@@ -1159,12 +1159,403 @@
         grid-template-columns: 1fr;
       }
     }
+
+    /* ========== HEADER ENHANCEMENTS ========== */
+    header {
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    
+    .header-center {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .status-indicators {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .indicator-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    
+    .indicator-icon {
+      font-size: 14px;
+    }
+    
+    .indicator-label {
+      color: var(--muted);
+      font-weight: 500;
+    }
+    
+    .indicator-status {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+    
+    .indicator-status.on {
+      background: rgba(53, 208, 127, 0.2);
+      color: var(--green);
+      border: 1px solid rgba(53, 208, 127, 0.4);
+    }
+    
+    .indicator-status.off {
+      background: rgba(255, 71, 87, 0.15);
+      color: var(--red);
+      border: 1px solid rgba(255, 71, 87, 0.3);
+    }
+    
+    .credits-btn {
+      padding: 6px 12px;
+      background: #15244a;
+      border: 1px solid #2b3b6b;
+      border-radius: 8px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 16px;
+      transition: all 0.2s;
+    }
+    
+    .credits-btn:hover {
+      background: #1c2f5a;
+      border-color: var(--blue);
+    }
+    
+    .user-profile {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 8px 4px 4px;
+      background: #15244a;
+      border: 1px solid #2b3b6b;
+      border-radius: 24px;
+    }
+    
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    
+    .user-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      max-width: 100px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .logout-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 4px;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+    
+    .logout-btn:hover {
+      opacity: 1;
+    }
+    
+    .guest-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: rgba(245, 165, 36, 0.15);
+      border: 1px solid rgba(245, 165, 36, 0.3);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--orange);
+      font-weight: 600;
+    }
+    
+    @media (max-width: 900px) {
+      .status-indicators {
+        display: none;
+      }
+      
+      .user-name {
+        display: none;
+      }
+    }
+
+    /* ========== ENLARGED REHAB MODE STATS ========== */
+    .rehab-mode-active-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    
+    .rehab-active-stat-card {
+      padding: 20px;
+      background: linear-gradient(135deg, #0e1730 0%, #15244a 100%);
+      border: 2px solid #2b3b6b;
+      border-radius: 16px;
+      text-align: center;
+    }
+    
+    .rehab-active-stat-card.left {
+      border-color: var(--orange);
+      background: linear-gradient(135deg, rgba(245, 165, 36, 0.05) 0%, rgba(245, 165, 36, 0.1) 100%);
+    }
+    
+    .rehab-active-stat-card.right {
+      border-color: var(--blue);
+      background: linear-gradient(135deg, rgba(45, 140, 255, 0.05) 0%, rgba(45, 140, 255, 0.1) 100%);
+    }
+    
+    .rehab-active-stat-card h4 {
+      margin: 0 0 8px 0;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .rehab-active-stat-card .big-reps {
+      font-size: 64px;
+      font-weight: 900;
+      color: var(--text);
+      line-height: 1;
+      text-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    .rehab-active-stat-card.left .big-reps {
+      color: var(--orange);
+    }
+    
+    .rehab-active-stat-card.right .big-reps {
+      color: var(--blue);
+    }
+    
+    .rehab-active-stat-card .target-text {
+      font-size: 14px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+    
+    .rehab-active-stat-card .target-text strong {
+      color: var(--text);
+    }
+
+    /* ========== CALIBRATION MODAL ========== */
+    .calibration-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 20px;
+    }
+    
+    .calibration-modal.hidden {
+      display: none;
+    }
+    
+    .calibration-content {
+      background: var(--panel);
+      border: 1px solid #2b3b6b;
+      border-radius: 20px;
+      padding: 32px;
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+    }
+    
+    .calibration-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+    
+    .calibration-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 0 0 12px 0;
+    }
+    
+    .calibration-description {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+      margin: 0 0 24px 0;
+    }
+    
+    .calibration-status {
+      padding: 16px;
+      background: #0e1730;
+      border: 2px solid #1a2446;
+      border-radius: 12px;
+      margin-bottom: 24px;
+    }
+    
+    .calibration-status.detecting {
+      border-color: var(--orange);
+      background: rgba(245, 165, 36, 0.1);
+    }
+    
+    .calibration-status.ready {
+      border-color: var(--green);
+      background: rgba(53, 208, 127, 0.1);
+    }
+    
+    .calibration-status-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+    
+    .calibration-status-text {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    
+    .calibration-instructions {
+      text-align: left;
+      padding: 16px;
+      background: #0e1730;
+      border-radius: 12px;
+      margin-bottom: 24px;
+    }
+    
+    .calibration-instructions h4 {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 0 0 12px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    
+    .calibration-instructions ul {
+      margin: 0;
+      padding: 0 0 0 20px;
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.8;
+    }
+    
+    .calibration-buttons {
+      display: flex;
+      gap: 12px;
+    }
+    
+    .calibration-btn {
+      flex: 1;
+      padding: 14px 24px;
+      border-radius: 12px;
+      border: none;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .calibration-btn.primary {
+      background: var(--green);
+      color: #000;
+    }
+    
+    .calibration-btn.primary:hover:not(:disabled) {
+      filter: brightness(1.1);
+    }
+    
+    .calibration-btn.primary:disabled {
+      background: #1a2446;
+      color: var(--muted);
+      cursor: not-allowed;
+    }
+    
+    .calibration-btn.secondary {
+      background: transparent;
+      border: 2px solid #2b3b6b;
+      color: var(--text);
+    }
+    
+    .calibration-btn.secondary:hover {
+      background: #15244a;
+    }
+
+    /* ========== DATA STORAGE INDICATOR ========== */
+    .storage-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 8px;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+    
+    .storage-indicator.guest {
+      background: rgba(245, 165, 36, 0.1);
+      border-color: rgba(245, 165, 36, 0.3);
+      color: var(--orange);
+    }
+    
+    .storage-indicator.firebase {
+      background: rgba(53, 208, 127, 0.1);
+      border-color: rgba(53, 208, 127, 0.3);
+      color: var(--green);
+    }
+    
+    .storage-indicator-icon {
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Integrated Detection System</h1>
+    <div class="header-center">
+      <div class="status-indicators">
+        <div class="indicator-item" id="bardi-indicator" title="Status Bardi Smart Device">
+          <span class="indicator-icon">🏠</span>
+          <span class="indicator-label">Bardi</span>
+          <span class="indicator-status off" id="bardi-status">OFF</span>
+        </div>
+        <div class="indicator-item" id="telegram-indicator" title="Status Telegram Bot">
+          <span class="indicator-icon">📱</span>
+          <span class="indicator-label">Telegram</span>
+          <span class="indicator-status off" id="telegram-status">OFF</span>
+        </div>
+      </div>
+    </div>
     <div class="right">
+      <a href="credits.html" class="credits-btn" title="Credits">📋</a>
+      <div id="user-profile" class="user-profile hidden">
+        <img id="user-avatar" class="user-avatar" src="" alt="User" />
+        <span id="user-name" class="user-name"></span>
+        <button id="logout-btn" class="logout-btn" title="Logout">🚪</button>
+      </div>
+      <div id="guest-badge" class="guest-badge hidden">
+        <span>👤 Tamu</span>
+      </div>
       <div id="status-badge" class="status safe">SAFE</div>
     </div>
   </header>
@@ -1381,14 +1772,36 @@
         <div id="rehab-mode-active" class="hidden">
           <h3>🎯 Rehab Mode - Aktif</h3>
           
+          <!-- Storage Indicator -->
+          <div class="storage-indicator guest" id="storage-indicator-active">
+            <span class="storage-indicator-icon">⚠️</span>
+            <span>Data disimpan sementara (mode tamu)</span>
+          </div>
+          
           <!-- Current Exercise Display -->
           <div class="current-exercise-display">
             <div class="current-exercise-label">Latihan Saat Ini:</div>
             <div class="current-exercise-name" id="current-exercise-name">-</div>
-            <div class="current-exercise-progress" id="current-exercise-progress">
-              <span class="progress-left">Kiri: <strong id="rehab-progress-left">0</strong>/<span id="rehab-target-left">0</span></span>
-              <span class="progress-right">Kanan: <strong id="rehab-progress-right">0</strong>/<span id="rehab-target-right">0</span></span>
+          </div>
+          
+          <!-- ENLARGED Rehab Mode Stats -->
+          <div class="rehab-mode-active-stats">
+            <div class="rehab-active-stat-card left">
+              <h4>Kiri</h4>
+              <div class="big-reps" id="rehab-big-left">0</div>
+              <div class="target-text">dari <strong id="rehab-target-left-big">0</strong> reps</div>
             </div>
+            <div class="rehab-active-stat-card right">
+              <h4>Kanan</h4>
+              <div class="big-reps" id="rehab-big-right">0</div>
+              <div class="target-text">dari <strong id="rehab-target-right-big">0</strong> reps</div>
+            </div>
+          </div>
+          
+          <!-- Small progress display (keep original for compatibility) -->
+          <div class="current-exercise-progress hidden" id="current-exercise-progress">
+            <span class="progress-left">Kiri: <strong id="rehab-progress-left">0</strong>/<span id="rehab-target-left">0</span></span>
+            <span class="progress-right">Kanan: <strong id="rehab-progress-right">0</strong>/<span id="rehab-target-right">0</span></span>
           </div>
           
           <!-- Progress Queue -->
@@ -1456,6 +1869,41 @@
   <audio id="alert-sound">
     <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAaW5mbyAAAAA=" type="audio/wav" />
   </audio>
+
+  <!-- Camera Calibration Modal -->
+  <div id="calibration-modal" class="calibration-modal hidden">
+    <div class="calibration-content">
+      <div class="calibration-icon">📷</div>
+      <h2 class="calibration-title">Kalibrasi Kamera</h2>
+      <p class="calibration-description">
+        Pastikan posisi tubuh Anda terdeteksi dengan baik sebelum memulai latihan.
+        Semua titik tulang harus terlihat di kamera.
+      </p>
+      
+      <div class="calibration-status detecting" id="calibration-status">
+        <div class="calibration-status-icon" id="calibration-status-icon">⏳</div>
+        <div class="calibration-status-text" id="calibration-status-text">Mendeteksi pose...</div>
+      </div>
+      
+      <div class="calibration-instructions">
+        <h4>Petunjuk Kalibrasi:</h4>
+        <ul>
+          <li>Berdiri atau duduk menghadap kamera</li>
+          <li>Pastikan seluruh tubuh terlihat (kepala hingga kaki)</li>
+          <li>Jaga jarak 1-2 meter dari kamera</li>
+          <li>Pastikan pencahayaan cukup</li>
+          <li>Hindari latar belakang yang terlalu ramai</li>
+        </ul>
+      </div>
+      
+      <div class="calibration-buttons">
+        <button id="calibration-skip-btn" class="calibration-btn secondary">Lewati</button>
+        <button id="calibration-confirm-btn" class="calibration-btn primary" disabled>
+          ✓ Sudah Sesuai Kalibrasi
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Config globals -->
   <script>
