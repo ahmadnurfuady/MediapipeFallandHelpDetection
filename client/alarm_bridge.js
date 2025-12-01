@@ -6,6 +6,7 @@
 // Auto-reset configuration for Bardi status
 const BARDI_RESET_BUFFER_MS = 2000; // Buffer time after alarm completes (2 seconds)
 const BARDI_RESET_ERROR_MS = 3000;  // Reset time after error (3 seconds)
+const DEFAULT_ALARM_DURATION_SECONDS = 1; // Default alarm duration if not specified
 
 // Timer management for auto-reset
 let bardiResetTimer = null;
@@ -128,7 +129,7 @@ async function onDetectedAndNotified(eventType, confVal) {
     updateBardiTriggerStatus('success');
     
     // Auto-reset to STANDBY after alarm completes
-    const alarmDuration = tuyaCommands.find(c => c.code === 'alarm_time')?.value || 1;
+    const alarmDuration = tuyaCommands.find(c => c.code === 'alarm_time')?.value || DEFAULT_ALARM_DURATION_SECONDS;
     const resetDelay = (alarmDuration * 1000) + BARDI_RESET_BUFFER_MS;
     
     bardiResetTimer = setTimeout(() => {
