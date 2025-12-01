@@ -2807,11 +2807,9 @@ async function startCameraWithDevice(deviceId) {
     setStatusText("Memulai kamera...");
     
     const constraints = {
-      video: {
-        deviceId: deviceId ? { exact: deviceId } : undefined,
-        width: { ideal: CONFIG.streamW },
-        height: { ideal: CONFIG.streamH }
-      },
+      video: deviceId 
+        ? { deviceId: { ideal: deviceId }, width: { ideal: CONFIG.streamW }, height: { ideal: CONFIG.streamH } }
+        : { facingMode: "user", width: { ideal: CONFIG.streamW }, height: { ideal: CONFIG.streamH } },
       audio: false
     };
     
