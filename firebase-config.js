@@ -17,7 +17,11 @@ import {
   where, 
   orderBy, 
   getDocs,
-  serverTimestamp 
+  serverTimestamp,
+  deleteDoc,
+  doc,
+  limit,
+  startAfter 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // Firebase configuration
@@ -228,6 +232,66 @@ function initAuth() {
   });
 }
 
+// Delete rehab history from Firestore
+async function deleteRehabHistoryFromFirestore(docId) {
+  if (!currentUser) {
+    return { success: false, error: "User not logged in" };
+  }
+
+  try {
+    const docRef = doc(db, "users", currentUser.uid, "rehabHistory", docId);
+    await deleteDoc(docRef);
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting from Firestore:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Get rehab history from Firestore with pagination
+async function getRehabHistoryPaginated(limitCount = 10, lastDocSnapshot = null) {
+  if (!currentUser) {
+    return { success: false, error: "User not logged in", data: [], lastDoc: null, hasMore: false };
+  }
+
+  try {
+    let q;
+    if (lastDocSnapshot) {
+      q = query(
+        collection(db, "users", currentUser.uid, "rehabHistory"),
+        orderBy("timestamp", "desc"),
+        startAfter(lastDocSnapshot),
+        limit(limitCount)
+      );
+    } else {
+      q = query(
+        collection(db, "users", currentUser.uid, "rehabHistory"),
+        orderBy("timestamp", "desc"),
+        limit(limitCount)
+      );
+    }
+
+    const querySnapshot = await getDocs(q);
+    const history = [];
+    let lastDoc = null;
+
+    querySnapshot.forEach((docSnap) => {
+      history.push({ id: docSnap.id, ...docSnap.data() });
+      lastDoc = docSnap;
+    });
+
+    return { 
+      success: true, 
+      data: history, 
+      lastDoc: lastDoc,
+      hasMore: history.length === limitCount
+    };
+  } catch (error) {
+    console.error("Error getting paginated Firestore history:", error);
+    return { success: false, error: error.message, data: [], lastDoc: null, hasMore: false };
+  }
+}
+
 // Export functions
 export {
   signInWithGoogle,
@@ -238,5 +302,7 @@ export {
   getRehabHistory,
   onAuthChange,
   initAuth,
-  checkGuestMode
+  checkGuestMode,
+  deleteRehabHistoryFromFirestore,
+  getRehabHistoryPaginated
 };
