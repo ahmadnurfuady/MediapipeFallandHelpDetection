@@ -3,6 +3,10 @@
 // Paste this into your browser-side script (near Telegram helpers).
 // Adjust backend URL if not same origin.
 
+// Auto-reset configuration for Bardi status
+const BARDI_RESET_BUFFER_MS = 2000; // Buffer time after alarm completes (2 seconds)
+const BARDI_RESET_ERROR_MS = 3000;  // Reset time after error (3 seconds)
+
 // replace existing postJson with this debug-safe version
 async function postJson(url, body) {
   try {
@@ -109,9 +113,9 @@ async function onDetectedAndNotified(eventType, confVal) {
     console.log('Tuya result', result);
     updateBardiTriggerStatus('success');
     
-    // Auto-reset ke STANDBY setelah alarm selesai
+    // Auto-reset to STANDBY after alarm completes
     const alarmDuration = tuyaCommands.find(c => c.code === 'alarm_time')?.value || 1;
-    const resetDelay = (alarmDuration * 1000) + 2000; // alarm duration + 2s buffer
+    const resetDelay = (alarmDuration * 1000) + BARDI_RESET_BUFFER_MS;
     
     setTimeout(() => {
       updateBardiTriggerStatus('standby');
@@ -120,10 +124,10 @@ async function onDetectedAndNotified(eventType, confVal) {
     console.error('Tuya call failed', e);
     updateBardiTriggerStatus('failed');
     
-    // Auto-reset ke STANDBY setelah error
+    // Auto-reset to STANDBY after error
     setTimeout(() => {
       updateBardiTriggerStatus('standby');
-    }, 3000); // 3 detik setelah error
+    }, BARDI_RESET_ERROR_MS);
   }
 }
 
