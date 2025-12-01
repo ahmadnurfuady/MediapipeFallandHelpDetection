@@ -86,17 +86,31 @@ async function onDetectedAndNotified(eventType, confVal) {
     { code: "alarm_time", value: 1 },
     { code: "alarm_switch", value: true }
   ];
-  if (event.deviceId) {
-    sendTuyaViaBackend(event.deviceId, tuyaCommands)
-      .then(r => console.log('Tuya result', r))
-      .catch(e => console.error('Tuya call failed', e));
-  } else {
-    if (window.TUYA_DEVICE_ID) {
-      sendTuyaViaBackend(window.TUYA_DEVICE_ID, tuyaCommands)
-        .then(r => console.log('Tuya result', r))
-        .catch(e => console.error('Tuya call failed', e));
+  
+  try {
+    if (event.deviceId) {
+      const result = await sendTuyaViaBackend(event.deviceId, tuyaCommands);
+      console.log('Tuya result', result);
+      localStorage.setItem('lastBardiTriggerStatus', 'success');
+    } else if (window.TUYA_DEVICE_ID) {
+      const result = await sendTuyaViaBackend(window.TUYA_DEVICE_ID, tuyaCommands);
+      console.log('Tuya result', result);
+      localStorage.setItem('lastBardiTriggerStatus', 'success');
     } else {
       console.warn('No TUYA deviceId configured in client; skipping Tuya call');
+    }
+    
+    // Update status indicators if available
+    if (typeof window.updateStatusIndicators === 'function') {
+      window.updateStatusIndicators();
+    }
+  } catch (e) {
+    console.error('Tuya call failed', e);
+    localStorage.setItem('lastBardiTriggerStatus', 'failed');
+    
+    // Update status indicators if available
+    if (typeof window.updateStatusIndicators === 'function') {
+      window.updateStatusIndicators();
     }
   }
 }

@@ -1093,17 +1093,31 @@ async function handleLogout() {
 
 // ========== STATUS INDICATORS ==========
 function updateStatusIndicators() {
-  // Update Bardi status
-  const bardiConnected = !!window.TUYA_DEVICE_ID && window.BACKEND_BASE !== '';
-  STATE.connections.bardiConnected = bardiConnected;
+  // Bardi status - based on last trigger result
   if (UI.bardiStatus) {
-    UI.bardiStatus.textContent = bardiConnected ? "ON" : "OFF";
-    UI.bardiStatus.className = `indicator-status ${bardiConnected ? 'on' : 'off'}`;
+    const bardiConfigured = !!window.TUYA_DEVICE_ID;
+    
+    if (!bardiConfigured) {
+      UI.bardiStatus.textContent = "NOT SET";
+      UI.bardiStatus.className = "indicator-status off";
+    } else {
+      const lastTrigger = localStorage.getItem('lastBardiTriggerStatus');
+      
+      if (lastTrigger === 'success') {
+        UI.bardiStatus.textContent = "CONNECTED";
+        UI.bardiStatus.className = "indicator-status on";
+      } else if (lastTrigger === 'failed') {
+        UI.bardiStatus.textContent = "FAILED";
+        UI.bardiStatus.className = "indicator-status off";
+      } else {
+        UI.bardiStatus.textContent = "STANDBY";
+        UI.bardiStatus.className = "indicator-status standby";
+      }
+    }
   }
   
-  // Update Telegram status
+  // Telegram status (keep existing logic)
   const telegramConnected = TELEGRAM.enabled && (TELEGRAM.proxyUrl || TELEGRAM.botToken);
-  STATE.connections.telegramConnected = telegramConnected;
   if (UI.telegramStatus) {
     UI.telegramStatus.textContent = telegramConnected ? "ON" : "OFF";
     UI.telegramStatus.className = `indicator-status ${telegramConnected ? 'on' : 'off'}`;
@@ -1976,49 +1990,8 @@ function updateAnglesUI(angles) {
 
 // ========== CAMERA FUNCTIONS ==========
 async function startCamera() {
-  try {
-    showLoading(true);
-    setStatusText("Memulai kamera...");
-    
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: "user",
-        width: { ideal: CONFIG.streamW },
-        height: { ideal: CONFIG.streamH },
-      },
-      audio: false,
-    });
-    
-    STATE.stream = stream;
-    UI.video.srcObject = stream;
-    await UI.video.play();
-    
-    UI.cameraPlaceholder.style.display = "none";
-    UI.video.style.display = "block";
-    UI.overlay.style.display = "block";
-    if (UI.roiCanvas) UI.roiCanvas.style.display = "block";
-    
-    syncCanvasSize();
-    
-    STATE.cameraActive = true;
-    setStatusText("Kamera aktif. Pilih fitur deteksi.");
-    showLoading(false);
-    
-    // Load model if not already loaded
-    if (!STATE.landmarker) {
-      await loadModel();
-    }
-    
-    STATE.running = true;
-    requestAnimationFrame(loop);
-    
-  } catch (err) {
-    console.error("Camera error:", err);
-    setStatusText("Gagal mengakses kamera. Periksa izin.");
-    showLoading(false);
-    UI.toggleCamera.checked = false;
-    STATE.cameraActive = false;
-  }
+  await enumerateCameras();
+  await startCameraWithDevice(currentCameraId);
 }
 
 function stopCamera() {
@@ -2766,6 +2739,109 @@ function updateHistoryPanelVisibility() {
   UI.historyPanel.classList.toggle('hidden', !STATE.rehabActive);
 }
 
+// ========== CAMERA ENUMERATION AND SWITCHING ==========
+let availableCameras = [];
+let currentCameraId = null;
+
+async function enumerateCameras() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    availableCameras = devices.filter(d => d.kind === 'videoinput');
+    renderCameraList();
+  } catch (error) {
+    console.error('Error enumerating cameras:', error);
+  }
+}
+
+function renderCameraList() {
+  const list = document.getElementById('camera-list');
+  if (!list) return;
+  
+  list.innerHTML = '';
+  
+  if (availableCameras.length === 0) {
+    list.innerHTML = '<div style="padding: 8px; color: var(--muted); font-size: 12px;">Tidak ada kamera</div>';
+    return;
+  }
+  
+  availableCameras.forEach((cam, i) => {
+    const div = document.createElement('div');
+    div.className = 'camera-item';
+    if (cam.deviceId === currentCameraId) div.classList.add('active');
+    
+    const label = cam.label || `Camera ${i + 1}`;
+    div.innerHTML = `
+      <span>📹</span>
+      <span style="flex: 1">${label}</span>
+      ${cam.deviceId === currentCameraId ? '<span>✓</span>' : ''}
+    `;
+    
+    div.onclick = () => switchCamera(cam.deviceId);
+    list.appendChild(div);
+  });
+}
+
+async function switchCamera(deviceId) {
+  if (deviceId === currentCameraId) return;
+  
+  currentCameraId = deviceId;
+  
+  if (STATE.cameraActive) {
+    stopCamera();
+    await startCameraWithDevice(deviceId);
+  }
+  
+  renderCameraList();
+  document.getElementById('hamburger-dropdown')?.classList.add('hidden');
+  showToast('✅ Kamera berhasil diubah');
+}
+
+async function startCameraWithDevice(deviceId) {
+  try {
+    showLoading(true);
+    setStatusText("Memulai kamera...");
+    
+    const constraints = {
+      video: {
+        deviceId: deviceId ? { exact: deviceId } : undefined,
+        width: { ideal: CONFIG.streamW },
+        height: { ideal: CONFIG.streamH }
+      },
+      audio: false
+    };
+    
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    STATE.stream = stream;
+    UI.video.srcObject = stream;
+    await UI.video.play();
+    
+    UI.cameraPlaceholder.style.display = "none";
+    UI.video.style.display = "block";
+    UI.overlay.style.display = "block";
+    if (UI.roiCanvas) UI.roiCanvas.style.display = "block";
+    
+    syncCanvasSize();
+    STATE.cameraActive = true;
+    setStatusText("Kamera aktif. Pilih fitur deteksi.");
+    showLoading(false);
+    
+    // Load model if not already loaded
+    if (!STATE.landmarker) {
+      await loadModel();
+    }
+    
+    STATE.running = true;
+    requestAnimationFrame(loop);
+    
+  } catch (err) {
+    console.error("Camera error:", err);
+    setStatusText("Gagal mengakses kamera");
+    showLoading(false);
+    UI.toggleCamera.checked = false;
+    STATE.cameraActive = false;
+  }
+}
+
 // ========== EVENT HANDLERS ==========
 UI.toggleCamera.addEventListener("change", async (e) => {
   if (e.target.checked) {
@@ -2933,6 +3009,20 @@ if (UI.historyList) {
   });
 }
 
+// Hamburger menu toggle
+document.getElementById('hamburger-btn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('hamburger-dropdown')?.classList.toggle('hidden');
+});
+
+// Close dropdown on outside click
+document.addEventListener('click', (e) => {
+  const dropdown = document.getElementById('hamburger-dropdown');
+  if (dropdown && !e.target.closest('.hamburger-menu')) {
+    dropdown.classList.add('hidden');
+  }
+});
+
 // ========== INITIALIZATION ==========
 async function init() {
   // Load saved ROI from localStorage
@@ -2961,6 +3051,12 @@ async function init() {
   
   // Initialize authentication
   await initializeAuth();
+  
+  // Enumerate cameras for camera selector
+  await enumerateCameras();
+  
+  // Expose updateStatusIndicators to window for external calls
+  window.updateStatusIndicators = updateStatusIndicators;
 }
 
 init();
