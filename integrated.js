@@ -954,8 +954,8 @@ function updateFPS() {
 
 // ========== AUTHENTICATION & USER MANAGEMENT ==========
 async function initializeAuth() {
-  const firebase = await loadFirebase();
-  if (!firebase) {
+  const firebaseService = await loadFirebase();
+  if (!firebaseService) {
     // Firebase not available, check if guest mode or allow anonymous
     const isGuest = localStorage.getItem("guestMode") === "true";
     if (isGuest) {
@@ -971,7 +971,7 @@ async function initializeAuth() {
     return;
   }
   
-  const authState = await firebase.initAuth();
+  const authState = await firebaseService.initAuth();
   STATE.auth.user = authState.user;
   STATE.auth.isGuest = authState.isGuest;
   STATE.auth.isAuthenticated = authState.isAuthenticated;
@@ -986,7 +986,7 @@ async function initializeAuth() {
   updateUserProfileUI();
   
   // Listen for auth changes
-  firebase.onAuthChange((state) => {
+  firebaseService.onAuthChange((state) => {
     STATE.auth.user = state.user;
     STATE.auth.isGuest = state.isGuest;
     STATE.auth.isAuthenticated = state.isAuthenticated;
@@ -1201,11 +1201,11 @@ function skipCalibration() {
 
 // ========== SAVE REHAB HISTORY ==========
 async function saveRehabHistory(rehabData) {
-  const firebase = await loadFirebase();
+  const firebaseService = await loadFirebase();
   
-  if (firebase && STATE.auth.user) {
+  if (firebaseService && STATE.auth.user) {
     // Save to Firebase
-    const result = await firebase.saveRehabHistory(rehabData);
+    const result = await firebaseService.saveRehabHistory(rehabData);
     if (result.success) {
       showToast("✅ Data disimpan ke cloud");
     } else {
