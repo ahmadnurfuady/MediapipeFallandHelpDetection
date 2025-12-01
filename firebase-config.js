@@ -7,7 +7,11 @@ import {
   signInWithPopup, 
   GoogleAuthProvider, 
   onAuthStateChanged,
-  signOut 
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { 
   getFirestore, 
@@ -20,6 +24,8 @@ import {
   serverTimestamp,
   deleteDoc,
   doc,
+  getDoc,
+  setDoc,
   limit,
   startAfter 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -65,18 +71,242 @@ function getCurrentAuthState() {
   };
 }
 
-// Sign in with Google
+// Validate username format
+function validateUsername(username) {
+  if (!username) {
+    return { valid: false, error: "Username wajib diisi" };
+  }
+  
+  const trimmed = username.trim();
+  
+  if (trimmed.length < 3) {
+    return { valid: false, error: "Username minimal 3 karakter" };
+  }
+  
+  if (trimmed.length > 20) {
+    return { valid: false, error: "Username maksimal 20 karakter" };
+  }
+  
+  // Check for spaces
+  if (/\s/.test(trimmed)) {
+    return { valid: false, error: "Username tidak boleh mengandung spasi" };
+  }
+  
+  // Only alphanumeric and underscore allowed
+  if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+    return { valid: false, error: "Username hanya boleh huruf, angka, dan underscore (_)" };
+  }
+  
+  return { valid: true, error: null };
+}
+
+// Check if username is available (case-insensitive)
+async function checkUsernameAvailable(username) {
+  if (!username) return false;
+  
+  try {
+    const usernameLower = username.toLowerCase().trim();
+    const usernameDoc = await getDoc(doc(db, "usernames", usernameLower));
+    return !usernameDoc.exists();
+  } catch (error) {
+    console.error("Error checking username:", error);
+    return false;
+  }
+}
+
+// Get user profile from Firestore
+async function getUserProfile(userId) {
+  if (!userId) {
+    return { success: false, error: "User ID required", profile: null };
+  }
+  
+  try {
+    const profileDoc = await getDoc(doc(db, "users", userId, "profile", "info"));
+    if (profileDoc.exists()) {
+      return { success: true, profile: profileDoc.data(), error: null };
+    }
+    return { success: false, profile: null, error: "Profile not found" };
+  } catch (error) {
+    console.error("Error getting user profile:", error);
+    return { success: false, profile: null, error: error.message };
+  }
+}
+
+// Register with email/password
+async function registerWithEmail(email, password, username) {
+  // Validate username format
+  const usernameValidation = validateUsername(username);
+  if (!usernameValidation.valid) {
+    return { success: false, error: usernameValidation.error, user: null };
+  }
+  
+  // Check username availability
+  const isAvailable = await checkUsernameAvailable(username);
+  if (!isAvailable) {
+    return { success: false, error: "Username sudah digunakan", user: null };
+  }
+  
+  try {
+    // Create Firebase auth user
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+    
+    const usernameLower = username.toLowerCase().trim();
+    
+    // Save user profile to Firestore
+    await setDoc(doc(db, "users", user.uid, "profile", "info"), {
+      username: usernameLower,
+      displayUsername: username.trim(), // Preserve original case for display
+      email: user.email,
+      authProvider: "email",
+      displayName: null,
+      photoURL: null,
+      createdAt: serverTimestamp()
+    });
+    
+    // Reserve username in usernames collection
+    await setDoc(doc(db, "usernames", usernameLower), {
+      userId: user.uid,
+      createdAt: serverTimestamp()
+    });
+    
+    currentUser = user;
+    isGuestMode = false;
+    localStorage.setItem("guestMode", "false");
+    
+    return { success: true, user: user, error: null };
+  } catch (error) {
+    console.error("Register error:", error);
+    return { success: false, error: getAuthErrorMessage(error.code), user: null };
+  }
+}
+
+// Sign in with email/password
+async function signInWithEmail(email, password) {
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    currentUser = userCredential.user;
+    isGuestMode = false;
+    localStorage.setItem("guestMode", "false");
+    return { success: true, user: userCredential.user, error: null };
+  } catch (error) {
+    console.error("Sign in error:", error);
+    return { success: false, error: getAuthErrorMessage(error.code), user: null };
+  }
+}
+
+// Sign in with Google (updated to check for username)
 async function signInWithGoogle() {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     currentUser = result.user;
     isGuestMode = false;
     localStorage.setItem("guestMode", "false");
-    return { success: true, user: result.user };
+    
+    // Check if user has a username set up
+    const profileResult = await getUserProfile(result.user.uid);
+    
+    if (profileResult.success && profileResult.profile?.username) {
+      // User has username, normal login
+      return { 
+        success: true, 
+        user: result.user, 
+        needsUsername: false,
+        profile: profileResult.profile
+      };
+    } else {
+      // User needs to set up username
+      return { 
+        success: true, 
+        user: result.user, 
+        needsUsername: true,
+        profile: null
+      };
+    }
   } catch (error) {
     console.error("Google sign-in error:", error);
+    return { success: false, error: getAuthErrorMessage(error.code), needsUsername: false };
+  }
+}
+
+// Save username for Google user (first-time setup)
+async function saveUsernameForGoogleUser(userId, username) {
+  // Validate username format
+  const usernameValidation = validateUsername(username);
+  if (!usernameValidation.valid) {
+    return { success: false, error: usernameValidation.error };
+  }
+  
+  // Check username availability
+  const isAvailable = await checkUsernameAvailable(username);
+  if (!isAvailable) {
+    return { success: false, error: "Username sudah digunakan" };
+  }
+  
+  try {
+    const user = auth.currentUser;
+    if (!user || user.uid !== userId) {
+      return { success: false, error: "User tidak valid" };
+    }
+    
+    const usernameLower = username.toLowerCase().trim();
+    
+    // Save user profile to Firestore
+    await setDoc(doc(db, "users", userId, "profile", "info"), {
+      username: usernameLower,
+      displayUsername: username.trim(), // Preserve original case for display
+      email: user.email,
+      authProvider: "google",
+      displayName: user.displayName,
+      photoURL: user.photoURL,
+      createdAt: serverTimestamp()
+    });
+    
+    // Reserve username in usernames collection
+    await setDoc(doc(db, "usernames", usernameLower), {
+      userId: userId,
+      createdAt: serverTimestamp()
+    });
+    
+    return { success: true, error: null };
+  } catch (error) {
+    console.error("Save username error:", error);
     return { success: false, error: error.message };
   }
+}
+
+// Send password reset email
+async function resetPassword(email) {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    return { success: true, error: null };
+  } catch (error) {
+    console.error("Reset password error:", error);
+    return { success: false, error: getAuthErrorMessage(error.code) };
+  }
+}
+
+// Get Firebase auth error message in Indonesian
+function getAuthErrorMessage(errorCode) {
+  const errorMessages = {
+    "auth/email-already-in-use": "Email sudah terdaftar",
+    "auth/invalid-email": "Format email tidak valid",
+    "auth/weak-password": "Password terlalu lemah (minimal 6 karakter)",
+    "auth/user-not-found": "Email tidak terdaftar",
+    "auth/wrong-password": "Password salah",
+    "auth/invalid-credential": "Email atau password salah",
+    "auth/too-many-requests": "Terlalu banyak percobaan. Coba lagi nanti.",
+    "auth/user-disabled": "Akun telah dinonaktifkan",
+    "auth/operation-not-allowed": "Metode login ini tidak diizinkan",
+    "auth/popup-closed-by-user": "Login dibatalkan",
+    "auth/popup-blocked": "Popup diblokir oleh browser",
+    "auth/network-request-failed": "Koneksi jaringan gagal. Periksa internet Anda.",
+    "auth/requires-recent-login": "Silakan login ulang untuk melanjutkan",
+    "auth/missing-email": "Email wajib diisi",
+    "auth/missing-password": "Password wajib diisi"
+  };
+  
+  return errorMessages[errorCode] || "Terjadi kesalahan. Silakan coba lagi.";
 }
 
 // Continue as guest
@@ -295,6 +525,8 @@ async function getRehabHistoryPaginated(limitCount = 10, lastDocSnapshot = null)
 // Export functions
 export {
   signInWithGoogle,
+  signInWithEmail,
+  registerWithEmail,
   continueAsGuest,
   logOut,
   getCurrentAuthState,
@@ -304,5 +536,11 @@ export {
   initAuth,
   checkGuestMode,
   deleteRehabHistoryFromFirestore,
-  getRehabHistoryPaginated
+  getRehabHistoryPaginated,
+  validateUsername,
+  checkUsernameAvailable,
+  getUserProfile,
+  saveUsernameForGoogleUser,
+  resetPassword,
+  getAuthErrorMessage
 };

@@ -1011,7 +1011,7 @@ async function initializeAuth() {
   });
 }
 
-function updateUserProfileUI() {
+async function updateUserProfileUI() {
   if (UI.userProfile && UI.guestBadge) {
     if (STATE.auth.user) {
       // Logged in user
@@ -1020,9 +1020,39 @@ function updateUserProfileUI() {
       
       if (UI.userAvatar && STATE.auth.user.photoURL) {
         UI.userAvatar.src = STATE.auth.user.photoURL;
+      } else if (UI.userAvatar) {
+        // Default avatar for email users
+        UI.userAvatar.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232d8cff'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z'/%3E%3C/svg%3E";
       }
-      if (UI.userName) {
-        UI.userName.textContent = STATE.auth.user.displayName || STATE.auth.user.email || "User";
+      
+      // Try to get username from Firestore profile
+      try {
+        const firebaseService = await loadFirebase();
+        if (firebaseService && firebaseService.getUserProfile) {
+          const profileResult = await firebaseService.getUserProfile(STATE.auth.user.uid);
+          
+          if (profileResult.success && profileResult.profile) {
+            // Display username (prefer displayUsername for original case, fallback to username)
+            const displayName = profileResult.profile.displayUsername || profileResult.profile.username;
+            if (UI.userName && displayName) {
+              UI.userName.textContent = displayName;
+            } else if (UI.userName) {
+              // Fallback to Google displayName or email
+              UI.userName.textContent = STATE.auth.user.displayName || STATE.auth.user.email || "User";
+            }
+          } else if (UI.userName) {
+            // No profile found, use Google info
+            UI.userName.textContent = STATE.auth.user.displayName || STATE.auth.user.email || "User";
+          }
+        } else if (UI.userName) {
+          // Firebase not available
+          UI.userName.textContent = STATE.auth.user.displayName || STATE.auth.user.email || "User";
+        }
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+        if (UI.userName) {
+          UI.userName.textContent = STATE.auth.user.displayName || STATE.auth.user.email || "User";
+        }
       }
     } else if (STATE.auth.isGuest) {
       // Guest mode

@@ -58,6 +58,182 @@
       margin: 0 0 32px 0;
     }
 
+    /* Auth sections */
+    .auth-section {
+      text-align: left;
+    }
+
+    .auth-section.hidden {
+      display: none;
+    }
+
+    .auth-section h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 20px 0;
+      text-align: center;
+      color: var(--text);
+    }
+
+    /* Form inputs */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #2b3b6b;
+      background: #0b162f;
+      color: var(--text);
+      font-size: 15px;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--blue);
+    }
+
+    .form-group input::placeholder {
+      color: #4a5a8a;
+    }
+
+    .form-group small {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* Password wrapper with toggle */
+    .password-wrapper {
+      position: relative;
+    }
+
+    .password-wrapper input {
+      padding-right: 45px;
+    }
+
+    .toggle-password {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 4px;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+
+    .toggle-password:hover {
+      opacity: 1;
+    }
+
+    /* Error and success messages */
+    .error {
+      display: block;
+      font-size: 12px;
+      color: var(--red);
+      margin-top: 4px;
+      min-height: 16px;
+    }
+
+    .success {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--green);
+      margin-top: 4px;
+    }
+
+    .success.hidden {
+      display: none;
+    }
+
+    /* Password strength indicator */
+    .password-strength {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .strength-bar {
+      flex: 1;
+      height: 4px;
+      background: #1a2446;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .strength-fill {
+      height: 100%;
+      width: 0%;
+      transition: width 0.3s, background 0.3s;
+      border-radius: 2px;
+    }
+
+    .strength-fill.weak {
+      background: var(--red);
+    }
+
+    .strength-fill.medium {
+      background: var(--orange);
+    }
+
+    .strength-fill.strong {
+      background: var(--green);
+    }
+
+    .strength-text {
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .strength-text.weak {
+      color: var(--red);
+    }
+
+    .strength-text.medium {
+      color: var(--orange);
+    }
+
+    .strength-text.strong {
+      color: var(--green);
+    }
+
+    /* Remember me checkbox */
+    .remember-me {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 16px 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .remember-me input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--blue);
+    }
+
+    /* Buttons */
     .login-btn {
       width: 100%;
       padding: 14px 24px;
@@ -74,12 +250,28 @@
       margin-bottom: 12px;
     }
 
+    .login-btn-primary {
+      background: linear-gradient(135deg, var(--blue), #3b82f6);
+      color: #fff;
+    }
+
+    .login-btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(45, 140, 255, 0.4);
+    }
+
+    .login-btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
     .login-btn-google {
       background: #fff;
       color: #333;
     }
 
-    .login-btn-google:hover {
+    .login-btn-google:hover:not(:disabled) {
       background: #f5f5f5;
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -101,6 +293,7 @@
       border-color: var(--blue);
     }
 
+    /* Divider */
     .divider {
       display: flex;
       align-items: center;
@@ -118,10 +311,40 @@
       background: #2b3b6b;
     }
 
+    /* Links */
+    .auth-link {
+      display: block;
+      text-align: center;
+      font-size: 13px;
+      color: var(--blue);
+      text-decoration: none;
+      margin-top: 16px;
+      cursor: pointer;
+    }
+
+    .auth-link:hover {
+      text-decoration: underline;
+    }
+
+    .forgot-link {
+      font-size: 12px;
+      color: var(--muted);
+      text-decoration: none;
+      margin-top: 8px;
+      display: inline-block;
+    }
+
+    .forgot-link:hover {
+      color: var(--blue);
+      text-decoration: underline;
+    }
+
+    /* Footer */
     .login-footer {
       margin-top: 32px;
       font-size: 12px;
       color: var(--muted);
+      text-align: center;
     }
 
     .login-footer a {
@@ -133,6 +356,7 @@
       text-decoration: underline;
     }
 
+    /* Guest warning */
     .guest-warning {
       background: rgba(245, 165, 36, 0.1);
       border: 1px solid rgba(245, 165, 36, 0.3);
@@ -149,6 +373,7 @@
       margin-right: 4px;
     }
 
+    /* Loading spinner */
     .loading-spinner {
       width: 20px;
       height: 20px;
@@ -170,14 +395,117 @@
       display: none !important;
     }
 
+    /* Error message box */
     .error-message {
       background: rgba(255, 71, 87, 0.1);
       border: 1px solid rgba(255, 71, 87, 0.3);
       border-radius: 8px;
       padding: 12px;
-      margin-top: 16px;
+      margin-bottom: 16px;
       font-size: 13px;
       color: var(--red);
+      text-align: center;
+    }
+
+    /* Modal styles */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal.hidden {
+      display: none;
+    }
+
+    .modal-content {
+      background: var(--panel);
+      border: 1px solid #2b3b6b;
+      border-radius: 20px;
+      padding: 32px;
+      max-width: 420px;
+      width: 100%;
+      position: relative;
+    }
+
+    .modal-content h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0 0 16px 0;
+      text-align: center;
+      color: var(--text);
+    }
+
+    .modal-content p {
+      font-size: 14px;
+      color: var(--muted);
+      margin: 0 0 20px 0;
+      text-align: center;
+    }
+
+    .close-modal {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: none;
+      border: none;
+      font-size: 24px;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+    }
+
+    .close-modal:hover {
+      color: var(--text);
+    }
+
+    /* Warning text */
+    .warning-text {
+      background: rgba(245, 165, 36, 0.1);
+      border: 1px solid rgba(245, 165, 36, 0.3);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: var(--orange);
+      margin: 16px 0;
+      text-align: center;
+    }
+
+    /* Success box */
+    .success-box {
+      background: rgba(53, 208, 127, 0.1);
+      border: 1px solid rgba(53, 208, 127, 0.3);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 13px;
+      color: var(--green);
+      text-align: center;
+      margin-top: 16px;
+    }
+
+    .success-box.hidden {
+      display: none;
+    }
+
+    /* Google user email display */
+    .google-email-display {
+      background: #0b162f;
+      border: 1px solid #2b3b6b;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 20px;
+      text-align: center;
     }
 
     /* Credits button */
@@ -200,6 +528,17 @@
       color: var(--text);
       border-color: var(--blue);
     }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+      .login-card {
+        padding: 28px 20px;
+      }
+
+      .login-title {
+        font-size: 24px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -214,6 +553,77 @@
       <p class="login-subtitle">MediaPipe Fall & Help Detection System</p>
 
       <div id="error-container" class="error-message hidden"></div>
+
+      <!-- Email/Password Login Section -->
+      <div id="email-login-section" class="auth-section">
+        <h2>Login dengan Email</h2>
+        
+        <div class="form-group">
+          <input type="email" id="login-email" placeholder="Email" required />
+          <span class="error" id="login-email-error"></span>
+        </div>
+        
+        <div class="form-group">
+          <div class="password-wrapper">
+            <input type="password" id="login-password" placeholder="Password" required />
+            <button type="button" class="toggle-password">👁️</button>
+          </div>
+          <span class="error" id="login-password-error"></span>
+        </div>
+        
+        <label class="remember-me">
+          <input type="checkbox" id="remember-me" />
+          Ingat Saya
+        </label>
+        
+        <button id="email-login-btn" class="login-btn login-btn-primary">Login</button>
+        
+        <a href="#" id="forgot-password-link" class="forgot-link">Lupa Password?</a>
+        <a href="#" id="show-register" class="auth-link">Belum punya akun? Daftar</a>
+      </div>
+
+      <!-- Email/Password Register Section -->
+      <div id="email-register-section" class="auth-section hidden">
+        <h2>Daftar Akun Baru</h2>
+        
+        <div class="form-group">
+          <input type="text" id="register-username" placeholder="Username" required minlength="3" maxlength="20" />
+          <small>3-20 karakter, hanya huruf, angka, underscore</small>
+          <span class="error" id="register-username-error"></span>
+          <span class="success hidden" id="register-username-success">✓ Tersedia</span>
+        </div>
+        
+        <div class="form-group">
+          <input type="email" id="register-email" placeholder="Email" required />
+          <span class="error" id="register-email-error"></span>
+        </div>
+        
+        <div class="form-group">
+          <div class="password-wrapper">
+            <input type="password" id="register-password" placeholder="Password (min 6 karakter)" required minlength="6" />
+            <button type="button" class="toggle-password">👁️</button>
+          </div>
+          <div class="password-strength">
+            <div class="strength-bar"><div id="strength-fill" class="strength-fill"></div></div>
+            <span id="strength-text" class="strength-text">-</span>
+          </div>
+          <span class="error" id="register-password-error"></span>
+        </div>
+        
+        <div class="form-group">
+          <div class="password-wrapper">
+            <input type="password" id="register-password-confirm" placeholder="Konfirmasi Password" required />
+            <button type="button" class="toggle-password">👁️</button>
+          </div>
+          <span class="error" id="register-password-confirm-error"></span>
+        </div>
+        
+        <button id="email-register-btn" class="login-btn login-btn-primary">Daftar</button>
+        
+        <a href="#" id="show-login" class="auth-link">Sudah punya akun? Login</a>
+      </div>
+
+      <div class="divider">atau</div>
 
       <button id="google-login-btn" class="login-btn login-btn-google">
         <svg viewBox="0 0 24 24">
@@ -247,115 +657,50 @@
     </div>
   </div>
 
+  <!-- Username Setup Modal (for Google users) -->
+  <div id="username-modal" class="modal hidden">
+    <div class="modal-content">
+      <h2>🎉 Selamat Datang!</h2>
+      <div class="google-email-display">
+        Email: <strong id="google-user-email"></strong>
+      </div>
+      
+      <div class="form-group">
+        <label>Pilih Username Anda:</label>
+        <input type="text" id="google-username" placeholder="username" required minlength="3" maxlength="20" />
+        <small>Username akan ditampilkan di aplikasi (3-20 karakter)</small>
+        <span class="error" id="google-username-error"></span>
+        <span class="success hidden" id="google-username-success">✓ Tersedia</span>
+      </div>
+      
+      <p class="warning-text">⚠️ Username tidak bisa diubah setelah dibuat</p>
+      
+      <button id="save-username-btn" class="login-btn login-btn-primary" disabled>Lanjutkan</button>
+    </div>
+  </div>
+
+  <!-- Forgot Password Modal -->
+  <div id="forgot-modal" class="modal hidden">
+    <div class="modal-content">
+      <button id="close-forgot-modal" class="close-modal">×</button>
+      <h2>Reset Password</h2>
+      <p>Masukkan email Anda untuk menerima link reset password</p>
+      
+      <div class="form-group">
+        <input type="email" id="forgot-email" placeholder="Email" required />
+        <span class="error" id="forgot-email-error"></span>
+      </div>
+      
+      <button id="send-reset-btn" class="login-btn login-btn-primary">Kirim Link Reset</button>
+      
+      <div id="reset-success" class="success-box hidden">
+        ✅ Link reset telah dikirim ke email Anda. Silakan cek inbox atau folder spam.
+      </div>
+    </div>
+  </div>
+
   <a href="credits.html" class="credits-link">📋 Credits</a>
 
-  <script type="module">
-    // Try to import Firebase config, but fall back to direct localStorage handling if it fails
-    let signInWithGoogle, continueAsGuest, initAuth;
-    
-    try {
-      const firebaseModule = await import('./firebase-config.js');
-      signInWithGoogle = firebaseModule.signInWithGoogle;
-      continueAsGuest = firebaseModule.continueAsGuest;
-      initAuth = firebaseModule.initAuth;
-    } catch (error) {
-      console.warn('Firebase module not available, using fallback:', error);
-      
-      // Fallback implementations
-      signInWithGoogle = async () => {
-        return { success: false, error: 'Firebase tidak tersedia. Silakan gunakan mode tamu.' };
-      };
-      
-      continueAsGuest = () => {
-        localStorage.setItem('guestMode', 'true');
-        return { success: true, isGuest: true };
-      };
-      
-      initAuth = async () => {
-        const isGuest = localStorage.getItem('guestMode') === 'true';
-        return { user: null, isGuest, isAuthenticated: isGuest };
-      };
-    }
-
-    const googleBtn = document.getElementById('google-login-btn');
-    const guestBtn = document.getElementById('guest-btn');
-    const errorContainer = document.getElementById('error-container');
-
-    function showError(message) {
-      errorContainer.textContent = message;
-      errorContainer.classList.remove('hidden');
-    }
-
-    function hideError() {
-      errorContainer.classList.add('hidden');
-    }
-
-    function setLoading(btn, loading) {
-      if (loading) {
-        btn.disabled = true;
-        btn.innerHTML = '<div class="loading-spinner"></div> Memuat...';
-        btn.classList.add('btn-loading');
-      } else {
-        btn.disabled = false;
-        btn.classList.remove('btn-loading');
-      }
-    }
-
-    // Check if already authenticated WITH REAL ACCOUNT (not guest)
-    if (initAuth) {
-      initAuth().then((state) => {
-        // Only redirect if user is logged in with Google (not a guest)
-        if (state.isAuthenticated && !state.isGuest && state.user) {
-          window.location.href = 'index.html';
-        }
-      }).catch(() => {});
-    }
-
-    // Google login handler
-    googleBtn.addEventListener('click', async () => {
-      hideError();
-      setLoading(googleBtn, true);
-      
-      try {
-        const result = await signInWithGoogle();
-        
-        if (result.success) {
-          window.location.href = 'index.html';
-        } else {
-          setLoading(googleBtn, false);
-          googleBtn.innerHTML = `
-            <svg viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Masuk dengan Google
-          `;
-          showError(result.error || 'Gagal masuk dengan Google. Silakan coba lagi.');
-        }
-      } catch (error) {
-        setLoading(googleBtn, false);
-        googleBtn.innerHTML = `
-          <svg viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-          </svg>
-          Masuk dengan Google
-        `;
-        showError('Gagal masuk dengan Google. Silakan coba lagi.');
-      }
-    });
-
-    // Guest mode handler
-    guestBtn.addEventListener('click', () => {
-      hideError();
-      // Direct localStorage fallback
-      localStorage.setItem('guestMode', 'true');
-      window.location.href = 'index.html';
-    });
-  </script>
+  <script type="module" src="./login.js"></script>
 </body>
 </html>
