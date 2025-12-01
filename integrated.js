@@ -145,6 +145,16 @@ const UI = {
   calibrationStatusText: document.getElementById("calibration-status-text"),
   calibrationConfirmBtn: document.getElementById("calibration-confirm-btn"),
   calibrationSkipBtn: document.getElementById("calibration-skip-btn"),
+  
+  // History Panel Elements
+  historyPanel: document.getElementById("history-panel"),
+  historyRefreshBtn: document.getElementById("history-refresh-btn"),
+  historyGuestWarning: document.getElementById("history-guest-warning"),
+  historyLoginBtn: document.getElementById("history-login-btn"),
+  historyLoading: document.getElementById("history-loading"),
+  historyEmpty: document.getElementById("history-empty"),
+  historyList: document.getElementById("history-list"),
+  historyLoadMore: document.getElementById("history-load-more"),
 };
 
 // ========== TELEGRAM CONFIG ==========
@@ -459,6 +469,14 @@ const STATE = {
     telegramConnected: false,
     lastBardiCheck: 0,
     lastTelegramCheck: 0,
+  },
+  
+  // History Panel State
+  history: {
+    items: [],              // Array of history items
+    lastDoc: null,          // Last document for pagination (Firestore)
+    hasMore: false,         // Whether there are more items to load
+    isLoading: false,       // Loading state
   },
 };
 
@@ -937,6 +955,9 @@ function updateFeatureToggles() {
   if (UI.roiPanel) {
     UI.roiPanel.classList.toggle("hidden", !STATE.fallDetectionActive);
   }
+  
+  // Show/hide History panel when rehab is active
+  updateHistoryPanelVisibility();
 }
 
 function updateFPS() {
@@ -1171,6 +1192,8 @@ function confirmCalibration() {
     updateFeatureToggles();
     const exercise = EXERCISES[STATE.rehab.currentExercise];
     setStatusText(`Rehab Medic aktif - ${exercise ? exercise.name : "Unknown"}`);
+    // Load history when rehab is enabled
+    loadRehabHistory(false);
   }
   
   STATE.calibration.pendingAction = null;
@@ -1191,6 +1214,8 @@ function skipCalibration() {
     updateFeatureToggles();
     const exercise = EXERCISES[STATE.rehab.currentExercise];
     setStatusText(`Rehab Medic aktif - ${exercise ? exercise.name : "Unknown"}`);
+    // Load history when rehab is enabled
+    loadRehabHistory(false);
   }
   
   STATE.calibration.pendingAction = null;
@@ -2459,7 +2484,10 @@ function completeRehabWorkout() {
     durasi: durationS
   };
   
-  saveRehabHistory(rehabHistoryData);
+  saveRehabHistory(rehabHistoryData).then(() => {
+    // Reload history after saving
+    loadRehabHistory(false);
+  });
   
   setStatusText("Rehab selesai! 🎉");
   showToast("🎉 Rehab selesai!");
@@ -2491,6 +2519,221 @@ function updateRehabModeTracking(rehabRes) {
   
   // Check if current exercise is complete
   checkExerciseCompletion();
+}
+
+// ========== HISTORY PANEL FUNCTIONS ==========
+// Format date to Indonesian format
+function formatIndonesianDate(date) {
+  const months = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
+  
+  let d;
+  if (date instanceof Date) {
+    d = date;
+  } else if (date && date.toDate) {
+    // Firestore Timestamp
+    d = date.toDate();
+  } else if (typeof date === 'string') {
+    d = new Date(date);
+  } else {
+    d = new Date();
+  }
+  
+  const day = d.getDate();
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  const hours = d.getHours().toString().padStart(2, '0');
+  const minutes = d.getMinutes().toString().padStart(2, '0');
+  
+  return `${day} ${month} ${year}, ${hours}:${minutes}`;
+}
+
+// Format duration in seconds to readable format
+function formatDurationSeconds(seconds) {
+  if (typeof seconds !== 'number' || isNaN(seconds)) return '-';
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Show/hide history panel UI elements
+function updateHistoryUI() {
+  if (!UI.historyPanel) return;
+  
+  // Show/hide loading
+  if (UI.historyLoading) {
+    UI.historyLoading.classList.toggle('hidden', !STATE.history.isLoading);
+  }
+  
+  // Show/hide empty state
+  const isEmpty = !STATE.history.isLoading && STATE.history.items.length === 0;
+  if (UI.historyEmpty) {
+    UI.historyEmpty.classList.toggle('hidden', !isEmpty);
+  }
+  
+  // Show/hide load more button (Firestore only)
+  if (UI.historyLoadMore) {
+    const showLoadMore = STATE.auth.user && STATE.history.hasMore && !STATE.history.isLoading;
+    UI.historyLoadMore.classList.toggle('hidden', !showLoadMore);
+  }
+  
+  // Show/hide guest warning
+  if (UI.historyGuestWarning) {
+    UI.historyGuestWarning.classList.toggle('hidden', !STATE.auth.isGuest);
+  }
+}
+
+// Render a single history item
+function renderHistoryItem(item, container) {
+  const div = document.createElement('div');
+  div.className = 'history-item';
+  div.dataset.itemId = item.id || '';
+  
+  const dateStr = formatIndonesianDate(item.timestamp);
+  const durationStr = formatDurationSeconds(item.durasi);
+  
+  div.innerHTML = `
+    <div class="history-item-header">
+      <div class="history-item-date">
+        <span>📅</span>
+        <span>${dateStr}</span>
+      </div>
+      <button class="history-item-delete" data-item-id="${item.id || ''}" title="Hapus">🗑️</button>
+    </div>
+    <div class="history-item-exercises">
+      <span>📋</span>
+      <span>${item.namaLatihan || '-'}</span>
+    </div>
+    <div class="history-item-stats">
+      <div class="history-item-stat">
+        <span>🔁</span>
+        <span>Latihan: <strong>${item.totalLatihan || 0}</strong></span>
+      </div>
+      <div class="history-item-stat">
+        <span>💪</span>
+        <span>Repetisi: <strong>${item.totalRepetisi || 0}</strong></span>
+      </div>
+      <div class="history-item-stat">
+        <span>⏱️</span>
+        <span>Durasi: <strong>${durationStr}</strong></span>
+      </div>
+    </div>
+  `;
+  
+  container.appendChild(div);
+}
+
+// Load rehab history
+async function loadRehabHistory(loadMore = false) {
+  if (STATE.history.isLoading) return;
+  
+  STATE.history.isLoading = true;
+  updateHistoryUI();
+  
+  const firebaseService = await loadFirebase();
+  
+  try {
+    if (STATE.auth.user && firebaseService) {
+      // Load from Firestore with pagination
+      const lastDoc = loadMore ? STATE.history.lastDoc : null;
+      const result = await firebaseService.getRehabHistoryPaginated(10, lastDoc);
+      
+      if (result.success) {
+        if (loadMore) {
+          STATE.history.items = [...STATE.history.items, ...result.data];
+        } else {
+          STATE.history.items = result.data;
+        }
+        STATE.history.lastDoc = result.lastDoc;
+        STATE.history.hasMore = result.hasMore;
+      } else {
+        console.error('Failed to load history from Firestore:', result.error);
+      }
+    } else if (STATE.auth.isGuest) {
+      // Load from localStorage
+      const history = JSON.parse(localStorage.getItem('guestRehabHistory') || '[]');
+      // Sort by timestamp descending and add temporary IDs
+      STATE.history.items = history
+        .map((item, index) => ({ ...item, id: `local_${index}` }))
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      STATE.history.hasMore = false;
+      STATE.history.lastDoc = null;
+    }
+  } catch (error) {
+    console.error('Error loading rehab history:', error);
+  }
+  
+  STATE.history.isLoading = false;
+  renderHistoryList();
+  updateHistoryUI();
+}
+
+// Render the history list
+function renderHistoryList() {
+  if (!UI.historyList) return;
+  
+  UI.historyList.innerHTML = '';
+  
+  STATE.history.items.forEach(item => {
+    renderHistoryItem(item, UI.historyList);
+  });
+}
+
+// Delete history item
+async function deleteHistoryItem(itemId) {
+  if (!itemId) return;
+  
+  const confirmed = confirm('Apakah Anda yakin ingin menghapus riwayat ini?');
+  if (!confirmed) return;
+  
+  const firebaseService = await loadFirebase();
+  
+  try {
+    if (STATE.auth.user && firebaseService && !itemId.startsWith('local_')) {
+      // Delete from Firestore
+      const result = await firebaseService.deleteRehabHistoryFromFirestore(itemId);
+      if (result.success) {
+        showToast('✅ Riwayat dihapus');
+      } else {
+        showToast('❌ Gagal menghapus riwayat');
+        return;
+      }
+    } else if (STATE.auth.isGuest) {
+      // Delete from localStorage - find by timestamp match
+      const sortedHistory = JSON.parse(localStorage.getItem('guestRehabHistory') || '[]');
+      const itemIndex = STATE.history.items.findIndex(item => item.id === itemId);
+      
+      if (itemIndex !== -1) {
+        const targetTimestamp = STATE.history.items[itemIndex].timestamp;
+        const originalIndex = sortedHistory.findIndex(item => item.timestamp === targetTimestamp);
+        
+        if (originalIndex !== -1) {
+          sortedHistory.splice(originalIndex, 1);
+          localStorage.setItem('guestRehabHistory', JSON.stringify(sortedHistory));
+        }
+      }
+      showToast('✅ Riwayat dihapus');
+    }
+    
+    // Remove from state and re-render
+    STATE.history.items = STATE.history.items.filter(item => item.id !== itemId);
+    renderHistoryList();
+    updateHistoryUI();
+    
+  } catch (error) {
+    console.error('Error deleting history item:', error);
+    showToast('❌ Gagal menghapus riwayat');
+  }
+}
+
+// Show history panel when rehab is active
+function updateHistoryPanelVisibility() {
+  if (!UI.historyPanel) return;
+  
+  // Show history panel when rehab medic is active
+  UI.historyPanel.classList.toggle('hidden', !STATE.rehabActive);
 }
 
 // ========== EVENT HANDLERS ==========
@@ -2628,6 +2871,36 @@ if (UI.calibrationSkipBtn) {
 // Logout button event handler
 if (UI.logoutBtn) {
   UI.logoutBtn.addEventListener("click", handleLogout);
+}
+
+// History panel event handlers
+if (UI.historyRefreshBtn) {
+  UI.historyRefreshBtn.addEventListener("click", () => {
+    loadRehabHistory(false);
+  });
+}
+
+if (UI.historyLoadMore) {
+  UI.historyLoadMore.addEventListener("click", () => {
+    loadRehabHistory(true);
+  });
+}
+
+if (UI.historyLoginBtn) {
+  UI.historyLoginBtn.addEventListener("click", () => {
+    window.location.href = "login.html";
+  });
+}
+
+// Event delegation for history item delete buttons
+if (UI.historyList) {
+  UI.historyList.addEventListener("click", (e) => {
+    const deleteBtn = e.target.closest(".history-item-delete");
+    if (deleteBtn) {
+      const itemId = deleteBtn.dataset.itemId;
+      deleteHistoryItem(itemId);
+    }
+  });
 }
 
 // ========== INITIALIZATION ==========

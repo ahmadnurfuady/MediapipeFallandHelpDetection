@@ -1527,6 +1527,227 @@
     .storage-indicator-icon {
       font-size: 14px;
     }
+
+    /* ========== REHAB HISTORY PANEL ========== */
+    .history-panel {
+      background: var(--panel);
+      border: 1px solid #1b2540;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+
+    .history-panel.hidden {
+      display: none;
+    }
+
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .history-header h3 {
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .history-refresh-btn {
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #2b3b6b;
+      background: #15244a;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 12px;
+      transition: background 0.2s;
+    }
+
+    .history-refresh-btn:hover {
+      background: #1c2f5a;
+    }
+
+    .history-guest-warning {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: rgba(245, 165, 36, 0.1);
+      border: 1px solid rgba(245, 165, 36, 0.3);
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 12px;
+      color: var(--orange);
+    }
+
+    .history-guest-warning.hidden {
+      display: none;
+    }
+
+    .history-guest-warning-text {
+      flex: 1;
+    }
+
+    .history-login-btn {
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--orange);
+      background: transparent;
+      color: var(--orange);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+
+    .history-login-btn:hover {
+      background: var(--orange);
+      color: #000;
+    }
+
+    .history-loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .history-loading.hidden {
+      display: none;
+    }
+
+    .history-spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .history-empty {
+      text-align: center;
+      padding: 24px 16px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .history-empty.hidden {
+      display: none;
+    }
+
+    .history-empty-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .history-item {
+      background: #0e1730;
+      border: 1px solid #1a2446;
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .history-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+
+    .history-item-date {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .history-item-delete {
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 71, 87, 0.3);
+      background: transparent;
+      color: var(--red);
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+
+    .history-item-delete:hover {
+      background: var(--red);
+      color: white;
+      border-color: var(--red);
+    }
+
+    .history-item-exercises {
+      font-size: 13px;
+      color: var(--text);
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .history-item-stats {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .history-item-stat {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .history-item-stat strong {
+      color: var(--text);
+    }
+
+    .history-load-more {
+      margin-top: 12px;
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #2b3b6b;
+      background: #15244a;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    .history-load-more:hover {
+      background: #1c2f5a;
+    }
+
+    .history-load-more.hidden {
+      display: none;
+    }
+
+    .history-load-more:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
@@ -1858,6 +2079,40 @@
           <div class="angle-item"><span>L. Knee</span><span id="ang-left-knee">0°</span></div>
           <div class="angle-item"><span>R. Knee</span><span id="ang-right-knee">0°</span></div>
         </div>
+      </div>
+
+      <!-- Rehab History Panel -->
+      <div class="history-panel hidden" id="history-panel">
+        <div class="history-header">
+          <h3>📋 Riwayat Latihan</h3>
+          <button class="history-refresh-btn" id="history-refresh-btn" title="Refresh">🔄</button>
+        </div>
+        
+        <!-- Guest Warning -->
+        <div class="history-guest-warning hidden" id="history-guest-warning">
+          <span>⚠️</span>
+          <span class="history-guest-warning-text">Data hanya disimpan sementara di browser</span>
+          <button class="history-login-btn" id="history-login-btn">Login</button>
+        </div>
+        
+        <!-- Loading State -->
+        <div class="history-loading hidden" id="history-loading">
+          <div class="history-spinner"></div>
+        </div>
+        
+        <!-- Empty State -->
+        <div class="history-empty hidden" id="history-empty">
+          <div class="history-empty-icon">📭</div>
+          <p>Belum ada riwayat latihan</p>
+        </div>
+        
+        <!-- History List -->
+        <div class="history-list" id="history-list">
+          <!-- History items will be rendered here -->
+        </div>
+        
+        <!-- Load More Button (Firestore only) -->
+        <button class="history-load-more hidden" id="history-load-more">Muat Lebih Banyak</button>
       </div>
     </div>
   </div>
