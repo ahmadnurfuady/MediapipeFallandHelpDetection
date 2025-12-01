@@ -956,16 +956,16 @@ function updateFPS() {
 async function initializeAuth() {
   const firebaseService = await loadFirebase();
   if (!firebaseService) {
-    // Firebase not available, check if guest mode or allow anonymous
+    // Firebase not available, check if user has explicitly chosen guest mode
     const isGuest = localStorage.getItem("guestMode") === "true";
     if (isGuest) {
       STATE.auth.isGuest = true;
       STATE.auth.isAuthenticated = true;
     } else {
-      // Allow usage without login (anonymous mode)
-      STATE.auth.isGuest = true;
-      STATE.auth.isAuthenticated = true;
-      localStorage.setItem("guestMode", "true");
+      // No authentication, but allow access (backward compatibility)
+      // Do NOT set guestMode or isAuthenticated automatically
+      STATE.auth.isGuest = false;
+      STATE.auth.isAuthenticated = false;
     }
     updateUserProfileUI();
     return;
@@ -976,12 +976,8 @@ async function initializeAuth() {
   STATE.auth.isGuest = authState.isGuest;
   STATE.auth.isAuthenticated = authState.isAuthenticated;
   
-  if (!STATE.auth.isAuthenticated) {
-    // Allow usage without login (anonymous mode) - don't redirect
-    STATE.auth.isGuest = true;
-    STATE.auth.isAuthenticated = true;
-    localStorage.setItem("guestMode", "true");
-  }
+  // Do NOT auto-set guest mode here
+  // Let user choose on login page
   
   updateUserProfileUI();
   
