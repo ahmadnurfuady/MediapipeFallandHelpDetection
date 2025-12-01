@@ -100,6 +100,10 @@ const elements = {
 // Current Google user waiting for username
 let pendingGoogleUser = null;
 
+// Validation request counters to prevent race conditions
+let registerUsernameValidationId = 0;
+let googleUsernameValidationId = 0;
+
 // Load Firebase module
 async function loadFirebase() {
   if (firebaseModule) return firebaseModule;
@@ -176,41 +180,67 @@ function setLoading(btn, loading, originalContent = null) {
   }
 }
 
-// Check username availability (debounced)
-const checkUsername = debounce(async (username, errorEl, successEl) => {
-  if (!username) {
-    showError(errorEl, '');
-    successEl?.classList.add('hidden');
-    return false;
-  }
-  
-  const firebase = await loadFirebase();
-  if (!firebase) {
-    showError(errorEl, 'Firebase tidak tersedia');
-    return false;
-  }
-  
-  // Validate format first
-  const validation = firebase.validateUsername(username);
-  if (!validation.valid) {
-    showError(errorEl, validation.error);
-    successEl?.classList.add('hidden');
-    return false;
-  }
-  
-  // Check availability
-  const isAvailable = await firebase.checkUsernameAvailable(username);
-  
-  if (isAvailable) {
-    showError(errorEl, '');
-    successEl?.classList.remove('hidden');
-    return true;
-  } else {
-    showError(errorEl, 'Username sudah digunakan');
-    successEl?.classList.add('hidden');
-    return false;
-  }
-}, 500);
+// Check username availability (debounced) with race condition protection
+function createUsernameChecker(validationIdKey) {
+  return debounce(async (username, errorEl, successEl, buttonToUpdate = null) => {
+    // Increment validation ID to track this request
+    const currentValidationId = validationIdKey === 'register' 
+      ? ++registerUsernameValidationId 
+      : ++googleUsernameValidationId;
+    
+    if (!username) {
+      showError(errorEl, '');
+      successEl?.classList.add('hidden');
+      if (buttonToUpdate) buttonToUpdate.disabled = true;
+      return false;
+    }
+    
+    const firebase = await loadFirebase();
+    if (!firebase) {
+      showError(errorEl, 'Firebase tidak tersedia');
+      if (buttonToUpdate) buttonToUpdate.disabled = true;
+      return false;
+    }
+    
+    // Validate format first
+    const validation = firebase.validateUsername(username);
+    if (!validation.valid) {
+      showError(errorEl, validation.error);
+      successEl?.classList.add('hidden');
+      if (buttonToUpdate) buttonToUpdate.disabled = true;
+      return false;
+    }
+    
+    // Check availability
+    const isAvailable = await firebase.checkUsernameAvailable(username);
+    
+    // Check if this is still the latest validation request
+    const latestId = validationIdKey === 'register' 
+      ? registerUsernameValidationId 
+      : googleUsernameValidationId;
+    
+    if (currentValidationId !== latestId) {
+      // A newer validation request has been made, ignore this result
+      return false;
+    }
+    
+    if (isAvailable) {
+      showError(errorEl, '');
+      successEl?.classList.remove('hidden');
+      if (buttonToUpdate) buttonToUpdate.disabled = false;
+      return true;
+    } else {
+      showError(errorEl, 'Username sudah digunakan');
+      successEl?.classList.add('hidden');
+      if (buttonToUpdate) buttonToUpdate.disabled = true;
+      return false;
+    }
+  }, 500);
+}
+
+// Create separate checkers for register and Google username forms
+const checkRegisterUsername = createUsernameChecker('register');
+const checkGoogleUsername = createUsernameChecker('google');
 
 // Update password strength indicator
 function updatePasswordStrength(password) {
@@ -547,16 +577,13 @@ function initEventListeners() {
   // Username availability check (register form)
   elements.registerUsername?.addEventListener('input', (e) => {
     const username = e.target.value;
-    checkUsername(username, elements.registerUsernameError, elements.registerUsernameSuccess);
+    checkRegisterUsername(username, elements.registerUsernameError, elements.registerUsernameSuccess);
   });
   
-  // Username availability check (Google modal)
-  elements.googleUsername?.addEventListener('input', async (e) => {
+  // Username availability check (Google modal) - pass the button to update
+  elements.googleUsername?.addEventListener('input', (e) => {
     const username = e.target.value;
-    const isValid = await checkUsername(username, elements.googleUsernameError, elements.googleUsernameSuccess);
-    if (elements.saveUsernameBtn) {
-      elements.saveUsernameBtn.disabled = !isValid;
-    }
+    checkGoogleUsername(username, elements.googleUsernameError, elements.googleUsernameSuccess, elements.saveUsernameBtn);
   });
   
   // Password strength indicator

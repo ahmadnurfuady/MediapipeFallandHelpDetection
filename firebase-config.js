@@ -27,7 +27,8 @@ import {
   getDoc,
   setDoc,
   limit,
-  startAfter 
+  startAfter,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // Firebase configuration
@@ -140,34 +141,39 @@ async function registerWithEmail(email, password, username) {
     return { success: false, error: usernameValidation.error, user: null };
   }
   
-  // Check username availability
-  const isAvailable = await checkUsernameAvailable(username);
-  if (!isAvailable) {
-    return { success: false, error: "Username sudah digunakan", user: null };
-  }
+  const usernameLower = username.toLowerCase().trim();
+  let user = null;
   
   try {
-    // Create Firebase auth user
+    // Create Firebase auth user first
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
+    user = userCredential.user;
     
-    const usernameLower = username.toLowerCase().trim();
-    
-    // Save user profile to Firestore
-    await setDoc(doc(db, "users", user.uid, "profile", "info"), {
-      username: usernameLower,
-      displayUsername: username.trim(), // Preserve original case for display
-      email: user.email,
-      authProvider: "email",
-      displayName: null,
-      photoURL: null,
-      createdAt: serverTimestamp()
-    });
-    
-    // Reserve username in usernames collection
-    await setDoc(doc(db, "usernames", usernameLower), {
-      userId: user.uid,
-      createdAt: serverTimestamp()
+    // Use transaction to atomically check and reserve username
+    await runTransaction(db, async (transaction) => {
+      // Check if username is already taken within transaction
+      const usernameDoc = await transaction.get(doc(db, "usernames", usernameLower));
+      
+      if (usernameDoc.exists()) {
+        throw new Error("USERNAME_TAKEN");
+      }
+      
+      // Reserve username
+      transaction.set(doc(db, "usernames", usernameLower), {
+        userId: user.uid,
+        createdAt: serverTimestamp()
+      });
+      
+      // Save user profile
+      transaction.set(doc(db, "users", user.uid, "profile", "info"), {
+        username: usernameLower,
+        displayUsername: username.trim(), // Preserve original case for display
+        email: user.email,
+        authProvider: "email",
+        displayName: null,
+        photoURL: null,
+        createdAt: serverTimestamp()
+      });
     });
     
     currentUser = user;
@@ -177,7 +183,27 @@ async function registerWithEmail(email, password, username) {
     return { success: true, user: user, error: null };
   } catch (error) {
     console.error("Register error:", error);
-    return { success: false, error: getAuthErrorMessage(error.code), user: null };
+    
+    // If Firestore operation failed but user was created, delete the orphaned user
+    if (user && error.message === "USERNAME_TAKEN") {
+      try {
+        await user.delete();
+      } catch (deleteError) {
+        console.error("Failed to delete orphaned user:", deleteError);
+      }
+      return { success: false, error: "Username sudah digunakan", user: null };
+    }
+    
+    // If any other Firestore error occurred after user creation, try to clean up
+    if (user && error.code !== "auth/email-already-in-use") {
+      try {
+        await user.delete();
+      } catch (deleteError) {
+        console.error("Failed to delete orphaned user:", deleteError);
+      }
+    }
+    
+    return { success: false, error: getAuthErrorMessage(error.code) || error.message, user: null };
   }
 }
 
@@ -237,12 +263,6 @@ async function saveUsernameForGoogleUser(userId, username) {
     return { success: false, error: usernameValidation.error };
   }
   
-  // Check username availability
-  const isAvailable = await checkUsernameAvailable(username);
-  if (!isAvailable) {
-    return { success: false, error: "Username sudah digunakan" };
-  }
-  
   try {
     const user = auth.currentUser;
     if (!user || user.uid !== userId) {
@@ -251,26 +271,41 @@ async function saveUsernameForGoogleUser(userId, username) {
     
     const usernameLower = username.toLowerCase().trim();
     
-    // Save user profile to Firestore
-    await setDoc(doc(db, "users", userId, "profile", "info"), {
-      username: usernameLower,
-      displayUsername: username.trim(), // Preserve original case for display
-      email: user.email,
-      authProvider: "google",
-      displayName: user.displayName,
-      photoURL: user.photoURL,
-      createdAt: serverTimestamp()
-    });
-    
-    // Reserve username in usernames collection
-    await setDoc(doc(db, "usernames", usernameLower), {
-      userId: userId,
-      createdAt: serverTimestamp()
+    // Use transaction to atomically check and reserve username
+    await runTransaction(db, async (transaction) => {
+      // Check if username is already taken within transaction
+      const usernameDoc = await transaction.get(doc(db, "usernames", usernameLower));
+      
+      if (usernameDoc.exists()) {
+        throw new Error("USERNAME_TAKEN");
+      }
+      
+      // Reserve username
+      transaction.set(doc(db, "usernames", usernameLower), {
+        userId: userId,
+        createdAt: serverTimestamp()
+      });
+      
+      // Save user profile
+      transaction.set(doc(db, "users", userId, "profile", "info"), {
+        username: usernameLower,
+        displayUsername: username.trim(), // Preserve original case for display
+        email: user.email,
+        authProvider: "google",
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        createdAt: serverTimestamp()
+      });
     });
     
     return { success: true, error: null };
   } catch (error) {
     console.error("Save username error:", error);
+    
+    if (error.message === "USERNAME_TAKEN") {
+      return { success: false, error: "Username sudah digunakan" };
+    }
+    
     return { success: false, error: error.message };
   }
 }
