@@ -1091,7 +1091,8 @@ function hideCalibrationModal() {
   if (UI.calibrationModal) {
     UI.calibrationModal.classList.add("hidden");
   }
-  STATE.calibration.pendingAction = null;
+  // Note: pendingAction is cleared by the caller (confirmCalibration/skipCalibration)
+  // after they use it to determine which feature to enable
 }
 
 function updateCalibrationStatus() {
